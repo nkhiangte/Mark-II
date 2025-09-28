@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ParsedMusic, Note, Measure } from '../types';
 
@@ -15,7 +14,7 @@ const PITCH_Y_MAP: Record<string, number> = {
 };
 
 const DURATION_WIDTH: Record<Note['duration'], number> = {
-    'whole': 80, 'half': 60, 'quarter': 40, 'eighth': 30, 'sixteenth': 25
+    'whole': 80, 'half': 60, 'quarter': 45, 'eighth': 35, 'sixteenth': 35
 };
 
 const STAFF_TOP = 40;
@@ -23,30 +22,71 @@ const STAFF_HEIGHT = 80;
 const LINE_SPACING = STAFF_HEIGHT / 4;
 
 const renderNote = (note: Note, x: number, key: string) => {
-    const pitch = note.pitch.replace(/[b#]/g, ''); // Simple rendering, ignores accidentals for positioning
-    const y = PITCH_Y_MAP[pitch] || PITCH_Y_MAP['B4']; // Default to B4 if not found
-    
     if (note.pitch === 'rest') {
-        let restSymbol;
+        let restSymbol: React.ReactNode = null;
         switch(note.duration) {
-            case 'whole': restSymbol = <rect x={x} y={STAFF_TOP + LINE_SPACING} width="20" height="10" fill="white" />; break; // Below 2nd line
-            case 'half': restSymbol = <rect x={x} y={STAFF_TOP + LINE_SPACING * 1.5} width="20" height="10" fill="white" />; break; // On 3rd line
-            case 'quarter': restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 15} fontSize="45" fill="white" fontFamily="serif" transform={`rotate(10, ${x}, ${STAFF_TOP + STAFF_HEIGHT/2})`}>{'{'}'}'}</text>; break;
-            default: restSymbol = <circle cx={x+5} cy={STAFF_TOP + STAFF_HEIGHT/2} r="5" fill="white" />; // Eighth rest placeholder
+            case 'whole': 
+                restSymbol = <rect x={x} y={STAFF_TOP + LINE_SPACING} width="20" height="8" fill="white" />; 
+                break;
+            case 'half': 
+                restSymbol = <rect x={x} y={STAFF_TOP + 2 * LINE_SPACING - 8} width="20" height="8" fill="white" />; 
+                break;
+            case 'quarter':
+                restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 20} fontSize="50" fill="white" fontFamily="serif">𝄽</text>;
+                break;
+            case 'eighth':
+                 restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄾</text>;
+                 break;
+            case 'sixteenth':
+                 restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄿</text>;
+                 break;
         }
         return <g key={key}>{restSymbol}</g>;
     }
 
+    let accidental: 'sharp' | 'flat' | null = null;
+    let pitchWithoutAccidental = note.pitch;
+
+    if (/[#b]/.test(note.pitch)) {
+        const match = note.pitch.match(/([A-G])([#b]+)(.*)/);
+        if(match) {
+            if (match[2].includes('#')) accidental = 'sharp';
+            if (match[2].includes('b')) accidental = 'flat';
+            pitchWithoutAccidental = match[1] + match[3];
+        }
+    }
+    
+    const y = PITCH_Y_MAP[pitchWithoutAccidental] || PITCH_Y_MAP['B4']; 
+    
+    const noteHeadX = x + (accidental ? 15 : 0);
+    const accidentalX = x;
+
     const hasStem = note.duration !== 'whole';
-    const stemDirection = y < STAFF_TOP + STAFF_HEIGHT / 2 ? 1 : -1;
+    const isFilled = ['quarter', 'eighth', 'sixteenth'].includes(note.duration);
+    const stemDirection = y < STAFF_TOP + STAFF_HEIGHT / 2 ? -1 : 1; // Stems go down if high, up if low
+    const stemX = noteHeadX + (stemDirection === 1 ? 10 : -10);
     const stemHeight = 60;
+    const stemY2 = y + stemDirection * stemHeight;
+
+    const flagDirection = stemDirection === -1 ? 1 : -1; // Flags point right
 
     return (
       <g key={key}>
-        {hasStem && <line x1={x + (stemDirection === 1 ? -10 : 10)} y1={y} x2={x + (stemDirection === 1 ? -10 : 10)} y2={y - stemDirection * stemHeight} stroke="white" strokeWidth="2" />}
-        <ellipse cx={x} cy={y} rx="10" ry="8" fill={note.duration === 'whole' ? 'transparent' : 'white'} stroke="white" strokeWidth="2" transform={`rotate(-20, ${x}, ${y})`} />
-        {['eighth', 'sixteenth'].includes(note.duration) && 
-            <path d={`M ${x + (stemDirection === 1 ? -10 : 10)} ${y - stemDirection * stemHeight} Q ${x + (stemDirection === 1 ? 0 : 20)} ${y - stemDirection * (stemHeight-10)}, ${x + (stemDirection === 1 ? -15 : 15)} ${y - stemDirection * (stemHeight-30)}`} stroke="white" strokeWidth="3" fill="none"/>
+        {accidental === 'sharp' && <text x={accidentalX} y={y + 5} fontSize="30" fill="white" fontFamily="serif">♯</text>}
+        {accidental === 'flat' && <text x={accidentalX} y={y + 8} fontSize="35" fill="white" fontFamily="serif">♭</text>}
+        
+        {hasStem && <line x1={stemX} y1={y} x2={stemX} y2={stemY2} stroke="white" strokeWidth="2" />}
+        
+        <ellipse cx={noteHeadX} cy={y} rx="10" ry="8" fill={isFilled ? 'white' : 'transparent'} stroke="white" strokeWidth="2.5" transform={`rotate(-20, ${noteHeadX}, ${y})`} />
+        
+        {note.duration === 'eighth' && 
+            <path d={`M ${stemX} ${stemY2} Q ${stemX + flagDirection * 15} ${stemY2 + 15}, ${stemX + flagDirection * 5} ${stemY2 + 30}`} stroke="white" strokeWidth="3" fill="none"/>
+        }
+        {note.duration === 'sixteenth' && 
+          <>
+            <path d={`M ${stemX} ${stemY2} Q ${stemX + flagDirection * 15} ${stemY2 + 15}, ${stemX + flagDirection * 5} ${stemY2 + 30}`} stroke="white" strokeWidth="3" fill="none"/>
+            <path d={`M ${stemX} ${stemY2 - 8} Q ${stemX + flagDirection * 15} ${stemY2 + 7}, ${stemX + flagDirection * 5} ${stemY2 + 22}`} stroke="white" strokeWidth="3" fill="none"/>
+          </>
         }
       </g>
     );

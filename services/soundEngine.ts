@@ -1,4 +1,3 @@
-
 import { ParsedMusic, Note } from '../types';
 
 // A4 = 440 Hz
@@ -20,6 +19,30 @@ const DURATION_MAP: { [key: string]: number } = {
   'quarter': 1,
   'eighth': 0.5,
   'sixteenth': 0.25,
+};
+
+const getFrequency = (pitch: string): number | undefined => {
+  // Direct match first (e.g., C4, F#5)
+  if (PITCH_MAP[pitch]) {
+      return PITCH_MAP[pitch];
+  }
+
+  // Handle flats by converting to their enharmonic sharp equivalent
+  const octave = pitch.slice(-1);
+  const noteName = pitch.slice(0, -1);
+  
+  const enharmonicEquivalents: { [key: string]: string } = {
+      'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 
+      'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B'
+  };
+
+  if (enharmonicEquivalents[noteName]) {
+      const sharpEquivalent = enharmonicEquivalents[noteName] + octave;
+      return PITCH_MAP[sharpEquivalent];
+  }
+
+  console.warn(`Could not find frequency for pitch: ${pitch}`);
+  return undefined;
 };
 
 export class SoundEngine {
@@ -52,7 +75,7 @@ export class SoundEngine {
       measure.notes.forEach(note => {
         const durationSec = this.getNoteDuration(note.duration, tempo);
         if (note.pitch !== 'rest') {
-          const frequency = PITCH_MAP[note.pitch.replace('b', '#')];
+          const frequency = getFrequency(note.pitch);
           if (frequency) {
             this.scheduleNote(frequency, currentTime, durationSec);
           }
