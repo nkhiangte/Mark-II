@@ -1,19 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ParsedMusic } from '../types';
 
-let ai: GoogleGenAI | null = null;
-
-const getAiClient = () => {
-  if (ai) {
-    return ai;
-  }
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set. Please configure it to use the AI features.");
-  }
-  ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  return ai;
-};
-
 const musicSchema = {
   type: Type.OBJECT,
   properties: {
@@ -72,6 +59,10 @@ const fileToGenerativePart = async (file: File) => {
 }
 
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set. Please configure it to use the AI features.");
+  }
+
   const prompt = `
     You are an expert music theorist and programmer.
     Analyze the following musical notation and convert it into a structured JSON object according to the provided schema.
@@ -85,13 +76,14 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
     Music Notation Input:
   `;
 
-  const contents = file ? 
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const contents = file ? 
     { parts: [ {text: prompt}, await fileToGenerativePart(file), {text: `\nTextual description (if any): ${notationText}`}] } :
     { parts: [ {text: prompt}, {text: notationText} ] };
 
-  try {
-    const aiClient = getAiClient();
-    const response = await aiClient.models.generateContent({
+    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
@@ -106,10 +98,6 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
     return parsedJson as ParsedMusic;
 
   } catch (error) {
-    // If it's our specific API key error, re-throw it so the UI can display the helpful message.
-    if (error instanceof Error && error.message.includes("API_KEY")) {
-      throw error;
-    }
     console.error("Error calling Gemini API:", error);
     throw new Error("Failed to parse sheet music. The AI model could not process the input.");
   }
