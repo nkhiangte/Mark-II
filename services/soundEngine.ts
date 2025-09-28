@@ -28,19 +28,33 @@ const getFrequency = (pitch: string): number | undefined => {
   }
 
   // Handle flats by converting to their enharmonic sharp equivalent
-  const octave = pitch.slice(-1);
-  const noteName = pitch.slice(0, -1);
-  
-  const enharmonicEquivalents: { [key: string]: string } = {
-      'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 
-      'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B'
+  // And sharps that are not in the map (B#, E#)
+  const octaveMatch = pitch.match(/\d+$/);
+  if (!octaveMatch) {
+      console.warn(`Could not parse octave for pitch: ${pitch}`);
+      return undefined;
+  }
+  const octave = parseInt(octaveMatch[0], 10);
+  const simpleNoteName = pitch.replace(/\d+$/, '');
+
+  const enharmonicMap: { [key: string]: { note: string, octaveOffset: number } } = {
+      'Db': { note: 'C#', octaveOffset: 0 },
+      'Eb': { note: 'D#', octaveOffset: 0 },
+      'Fb': { note: 'E',  octaveOffset: 0 },
+      'Gb': { note: 'F#', octaveOffset: 0 },
+      'Ab': { note: 'G#', octaveOffset: 0 },
+      'Bb': { note: 'A#', octaveOffset: 0 },
+      'Cb': { note: 'B',  octaveOffset: -1 },
+      'B#': { note: 'C',  octaveOffset: 1 },
+      'E#': { note: 'F',  octaveOffset: 0 },
   };
 
-  if (enharmonicEquivalents[noteName]) {
-      const sharpEquivalent = enharmonicEquivalents[noteName] + octave;
-      return PITCH_MAP[sharpEquivalent];
+  if (enharmonicMap[simpleNoteName]) {
+      const mapping = enharmonicMap[simpleNoteName];
+      const newPitch = `${mapping.note}${octave + mapping.octaveOffset}`;
+      return PITCH_MAP[newPitch];
   }
-
+  
   console.warn(`Could not find frequency for pitch: ${pitch}`);
   return undefined;
 };

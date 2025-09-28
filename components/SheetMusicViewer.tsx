@@ -23,24 +23,14 @@ const LINE_SPACING = STAFF_HEIGHT / 4;
 
 const renderNote = (note: Note, x: number, key: string) => {
     if (note.pitch === 'rest') {
-        let restSymbol: React.ReactNode = null;
-        switch(note.duration) {
-            case 'whole': 
-                restSymbol = <rect x={x} y={STAFF_TOP + LINE_SPACING} width="20" height="8" fill="white" />; 
-                break;
-            case 'half': 
-                restSymbol = <rect x={x} y={STAFF_TOP + 2 * LINE_SPACING - 8} width="20" height="8" fill="white" />; 
-                break;
-            case 'quarter':
-                restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 20} fontSize="50" fill="white" fontFamily="serif">𝄽</text>;
-                break;
-            case 'eighth':
-                 restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄾</text>;
-                 break;
-            case 'sixteenth':
-                 restSymbol = <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄿</text>;
-                 break;
-        }
+        const RestSymbols: Record<Note['duration'], React.ReactNode> = {
+            'whole': <rect x={x} y={STAFF_TOP + LINE_SPACING} width="20" height="8" fill="white" />,
+            'half': <rect x={x} y={STAFF_TOP + 2 * LINE_SPACING - 8} width="20" height="8" fill="white" />,
+            'quarter': <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 20} fontSize="50" fill="white" fontFamily="serif">𝄽</text>,
+            'eighth': <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄾</text>,
+            'sixteenth': <text x={x} y={STAFF_TOP + STAFF_HEIGHT/2 + 10} fontSize="40" fill="white" fontFamily="serif">𝄿</text>,
+        };
+        const restSymbol = RestSymbols[note.duration];
         return <g key={key}>{restSymbol}</g>;
     }
 
