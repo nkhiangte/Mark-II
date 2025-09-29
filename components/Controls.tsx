@@ -87,13 +87,13 @@ const Controls: React.FC<ControlsProps> = ({
           </div>
         ) : (
           <p className="text-sm text-gray-400 mb-4">
-            Paste text notation (tabs, sol-fa) or upload an image of sheet music.
+            Paste text notation or upload an image of sheet music, tabs, or sol-fa.
           </p>
         )}
         <textarea
           value={notationText}
           onChange={(e) => setNotationText(e.target.value)}
-          placeholder="e.g., C G Am F or guitar tabs..."
+          placeholder="e.g., C G Am F, guitar tabs, or 'd r m f s'..."
           className="w-full h-32 p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
           disabled={isImportDisabled}
         />

@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { ParsedMusic } from '../types';
-import { API_KEY } from '../config';
+import { API_KEY } from '../config.ts';
 
 const musicSchema = {
   type: Type.OBJECT,
@@ -66,14 +66,19 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
   }
 
   const prompt = `
-    You are an expert music theorist and programmer.
-    Analyze the following musical notation and convert it into a structured JSON object according to the provided schema.
-    The input could be text-based (like guitar tablature or tonic sol-fa) or an image of standard notation.
-    - For pitch, use Scientific Pitch Notation (e.g., C4 is middle C).
-    - For rests, use the pitch 'rest'.
-    - Ensure the durations are correctly identified.
+    You are an expert music theorist and programmer with OCR capabilities.
+    Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
+
+    The input can be:
+    1. Text-based notation (like guitar tablature, chord names, or tonic sol-fa).
+    2. An image file. If an image is provided, perform OCR to extract the musical content. The image could contain standard staff notation, guitar tablature, or tonic sol-fa text.
+
+    Key Instructions:
+    - Convert all pitches to Scientific Pitch Notation (e.g., C4 is middle C). Assume a key of C Major if not specified, so 'do' or 'd' would be 'C4'.
+    - Use 'rest' for the pitch of any rests.
+    - Correctly identify note durations (whole, half, quarter, eighth, sixteenth).
     - Generate a valid base64 encoded MIDI file string for the music.
-    - If the input is ambiguous or invalid, make a reasonable interpretation or return an error structure.
+    - If the input is ambiguous or invalid, make a reasonable interpretation. For example, if no durations are given for tonic sol-fa, assume they are all quarter notes.
 
     Music Notation Input:
   `;

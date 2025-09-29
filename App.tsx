@@ -8,7 +8,7 @@ import Header from './components/Header';
 import Controls from './components/Controls';
 import SheetMusicViewer from './components/SheetMusicViewer';
 import Loader from './components/Loader';
-import { API_KEY } from './config';
+import { API_KEY } from './config.ts';
 
 const App: React.FC = () => {
   const [parsedMusic, setParsedMusic] = useState<ParsedMusic | null>(null);
