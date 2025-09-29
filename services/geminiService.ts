@@ -1,7 +1,6 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ParsedMusic } from '../types';
-import { API_KEY } from '../config.ts';
+import { API_KEY } from '../config';
 
 const musicSchema = {
   type: Type.OBJECT,
@@ -60,11 +59,24 @@ const fileToGenerativePart = async (file: File) => {
   };
 }
 
+const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+    let timeoutId: number;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+            reject(new Error(timeoutMessage));
+        }, timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+    });
+};
+
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
   if (!API_KEY) {
-    throw new Error("Gemini API key is not configured. Please add it to the config.ts file.");
+    throw new Error("Configuration needed: Your Gemini API key is missing. Please add it to config.ts.");
   }
-
+  
   const prompt = `
     You are an expert music theorist and programmer with OCR capabilities.
     Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
@@ -90,7 +102,7 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
     { parts: [ {text: prompt}, await fileToGenerativePart(file), {text: `\nTextual description (if any): ${notationText}`}] } :
     { parts: [ {text: prompt}, {text: notationText} ] };
 
-    const response = await ai.models.generateContent({
+    const apiCall = ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
@@ -99,6 +111,12 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
       },
     });
 
+    const response: GenerateContentResponse = await generateWithTimeout(
+        apiCall,
+        60000, // 60 seconds
+        "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again."
+    );
+
     const jsonText = response.text.trim();
     const parsedJson = JSON.parse(jsonText);
 
@@ -106,6 +124,9 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
 
   } catch (error) {
     console.error("Error calling Gemini API:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to parse sheet music: ${error.message}`);
+    }
     throw new Error("Failed to parse sheet music. The AI model could not process the input.");
   }
 };

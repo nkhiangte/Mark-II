@@ -19,7 +19,7 @@ interface ControlsProps {
 
 const Controls: React.FC<ControlsProps> = ({ 
   onImport, onPlay, onStop, onExportWav, onExportMidi, 
-  isMusicLoaded, isPlaying, isLoading, isApiKeyAvailable 
+  isMusicLoaded, isPlaying, isLoading, isApiKeyAvailable
 }) => {
   const [notationText, setNotationText] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -81,15 +81,14 @@ const Controls: React.FC<ControlsProps> = ({
     <div className="bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 space-y-6 h-full flex flex-col">
       <div>
         <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Import Music</h2>
-        {!isApiKeyAvailable ? (
-          <div className="text-sm text-yellow-400 p-3 mb-4 bg-yellow-900/50 border border-yellow-700 rounded-md">
-            <strong>AI Features Disabled:</strong> Please configure your API key in the <code>config.ts</code> file to enable music parsing.
+        {!isApiKeyAvailable && (
+          <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 text-sm rounded-md p-3 mb-4">
+            <strong>Action Required:</strong> Please set your Gemini API key in <code className="bg-gray-700 p-1 rounded text-xs">config.ts</code> to enable parsing.
           </div>
-        ) : (
-          <p className="text-sm text-gray-400 mb-4">
-            Paste text notation or upload an image of sheet music, tabs, or sol-fa.
-          </p>
         )}
+        <p className="text-sm text-gray-400 mb-4">
+          Paste text notation or upload an image of sheet music, tabs, or sol-fa.
+        </p>
         <textarea
           value={notationText}
           onChange={(e) => setNotationText(e.target.value)}

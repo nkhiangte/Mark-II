@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ParsedMusic } from './types';
 import { parseSheetMusic } from './services/geminiService';
 import { SoundEngine } from './services/soundEngine';
@@ -8,14 +8,18 @@ import Header from './components/Header';
 import Controls from './components/Controls';
 import SheetMusicViewer from './components/SheetMusicViewer';
 import Loader from './components/Loader';
-import { API_KEY } from './config.ts';
+import { API_KEY } from './config';
 
 const App: React.FC = () => {
   const [parsedMusic, setParsedMusic] = useState<ParsedMusic | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const isApiKeyAvailable = !!API_KEY;
+  const [isApiKeyAvailable, setIsApiKeyAvailable] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsApiKeyAvailable(!!API_KEY);
+  }, []);
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
 
@@ -86,14 +90,15 @@ const App: React.FC = () => {
           {isLoading && <Loader />}
           {error && <div className="text-red-400 text-center">{error}</div>}
           {!isLoading && !error && parsedMusic && <SheetMusicViewer music={parsedMusic} />}
-          {!isLoading && !error && !parsedMusic && !isApiKeyAvailable && (
-            <div className="text-center text-yellow-400">
-              <h3 className="text-2xl font-semibold mb-2">Configuration Needed</h3>
-              <p>The Gemini API key has not been configured.</p>
-              <p className="mt-1">Please add your key to the <code className="bg-gray-700 p-1 rounded text-yellow-300">config.ts</code> file to enable AI features.</p>
+          {!isApiKeyAvailable && !isLoading && (
+             <div className="text-center text-gray-400">
+                <h2 className="text-2xl font-bold text-yellow-400 mb-4">Configuration Required</h2>
+                <p className="max-w-md mx-auto">
+                    To enable AI-powered music parsing, please add your Google Gemini API key to the <code className="bg-gray-700 text-yellow-300 p-1 rounded">config.ts</code> file in the project.
+                </p>
             </div>
           )}
-          {!isLoading && !error && !parsedMusic && isApiKeyAvailable && (
+          {isApiKeyAvailable && !isLoading && !error && !parsedMusic && (
             <div className="text-center text-gray-500">
               <p className="text-xl">Welcome to Mark II</p>
               <p>Import your sheet music using the panel on the left to begin.</p>
