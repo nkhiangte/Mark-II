@@ -1,6 +1,6 @@
 
-import React, { useState, useCallback, useRef } from 'react';
-import { ParsedMusic, Note } from './types';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { ParsedMusic } from './types';
 import { parseSheetMusic } from './services/geminiService';
 import { SoundEngine } from './services/soundEngine';
 import { exportToWav, exportToMidi } from './services/exportService';
@@ -14,8 +14,16 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isApiKeyAvailable, setIsApiKeyAvailable] = useState<boolean>(false);
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
+
+  useEffect(() => {
+    // Check for the presence of the API key on component mount.
+    if (process.env.API_KEY) {
+      setIsApiKeyAvailable(true);
+    }
+  }, []);
 
   const handleImport = useCallback(async (notation: string, file?: File) => {
     setIsLoading(true);
@@ -77,13 +85,21 @@ const App: React.FC = () => {
             isMusicLoaded={!!parsedMusic}
             isPlaying={isPlaying}
             isLoading={isLoading}
+            isApiKeyAvailable={isApiKeyAvailable}
           />
         </div>
         <div className="xl:w-2/3 w-full flex-grow bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 min-h-[400px] flex items-center justify-center">
           {isLoading && <Loader />}
           {error && <div className="text-red-400 text-center">{error}</div>}
           {!isLoading && !error && parsedMusic && <SheetMusicViewer music={parsedMusic} />}
-          {!isLoading && !error && !parsedMusic && (
+          {!isLoading && !error && !parsedMusic && !isApiKeyAvailable && (
+            <div className="text-center text-yellow-400">
+              <h3 className="text-2xl font-semibold mb-2">Configuration Needed</h3>
+              <p>The Gemini API key has not been configured.</p>
+              <p className="mt-1">Please set the <code className="bg-gray-700 p-1 rounded text-yellow-300">API_KEY</code> environment variable to enable AI features.</p>
+            </div>
+          )}
+          {!isLoading && !error && !parsedMusic && isApiKeyAvailable && (
             <div className="text-center text-gray-500">
               <p className="text-xl">Welcome to Mark II</p>
               <p>Import your sheet music using the panel on the left to begin.</p>

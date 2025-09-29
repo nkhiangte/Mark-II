@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ParsedMusic } from '../types';
 
@@ -60,7 +61,7 @@ const fileToGenerativePart = async (file: File) => {
 
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
   if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set. Please configure it to use the AI features.");
+    throw new Error("Gemini API key is not configured. Please set the API_KEY environment variable.");
   }
 
   const prompt = `
