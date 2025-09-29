@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { ParsedMusic } from './types';
 import { parseSheetMusic } from './services/geminiService';
 import { SoundEngine } from './services/soundEngine';
@@ -14,16 +14,9 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isApiKeyAvailable, setIsApiKeyAvailable] = useState<boolean>(false);
+  const [isApiKeyAvailable] = useState<boolean>(!!process.env.API_KEY);
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
-
-  useEffect(() => {
-    // Check for the presence of the API key on component mount.
-    if (process.env.API_KEY) {
-      setIsApiKeyAvailable(true);
-    }
-  }, []);
 
   const handleImport = useCallback(async (notation: string, file?: File) => {
     setIsLoading(true);
