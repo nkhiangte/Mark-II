@@ -9,4 +9,4 @@
 //  Example: export const API_KEY = "AIzaSy...Your...Key...Here...";
 // --------------------------------------------------------------------------
 
-export const API_KEY = "AIzaSyA-qjhhb-epPV1oQPfK5UVUxvjZMd2Zg50"; // <-- PASTE YOUR GEMINI API KEY HERE
+export const API_KEY = "AIzaSyB8DESwTrKt8aKXpyZJU-8AWqAIyUeFMQc"; // <-- PASTE YOUR GEMINI API KEY HERE
