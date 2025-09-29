@@ -1,8 +1,2 @@
-// To configure the Gemini API key, replace "YOUR_API_KEY" with your actual key.
-// IMPORTANT: Keep this file private and do not commit it to public repositories.
-
-window.process = {
-  env: {
-    API_KEY: "AIzaSyA-qjhhb-epPV1oQPfK5UVUxvjZMd2Zg50",
-  },
-};
+// This file is deprecated and can be safely deleted.
+// API Key configuration has been moved to `config.ts`.

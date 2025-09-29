@@ -83,7 +83,7 @@ const Controls: React.FC<ControlsProps> = ({
         <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Import Music</h2>
         {!isApiKeyAvailable ? (
           <div className="text-sm text-yellow-400 p-3 mb-4 bg-yellow-900/50 border border-yellow-700 rounded-md">
-            <strong>AI Features Disabled:</strong> Please configure the <code>API_KEY</code> environment variable to enable music parsing.
+            <strong>AI Features Disabled:</strong> Please configure your API key in the <code>config.ts</code> file to enable music parsing.
           </div>
         ) : (
           <p className="text-sm text-gray-400 mb-4">

@@ -8,13 +8,14 @@ import Header from './components/Header';
 import Controls from './components/Controls';
 import SheetMusicViewer from './components/SheetMusicViewer';
 import Loader from './components/Loader';
+import { API_KEY } from './config';
 
 const App: React.FC = () => {
   const [parsedMusic, setParsedMusic] = useState<ParsedMusic | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isApiKeyAvailable] = useState<boolean>(!!process.env.API_KEY);
+  const isApiKeyAvailable = !!API_KEY;
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
 
@@ -89,7 +90,7 @@ const App: React.FC = () => {
             <div className="text-center text-yellow-400">
               <h3 className="text-2xl font-semibold mb-2">Configuration Needed</h3>
               <p>The Gemini API key has not been configured.</p>
-              <p className="mt-1">Please set the <code className="bg-gray-700 p-1 rounded text-yellow-300">API_KEY</code> environment variable to enable AI features.</p>
+              <p className="mt-1">Please add your key to the <code className="bg-gray-700 p-1 rounded text-yellow-300">config.ts</code> file to enable AI features.</p>
             </div>
           )}
           {!isLoading && !error && !parsedMusic && isApiKeyAvailable && (
