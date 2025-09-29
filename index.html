@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mark II - Music Notation Transcriber</title>
+    <script>
+      // --- CONFIGURATION ---
+      // Paste your Gemini API Key in the line below.
+      // IMPORTANT: Keep this key private and do not commit it to public repositories.
+      window.process = {
+        env: {
+          API_KEY: "AIzaSyA-qjhhb-epPV1oQPfK5UVUxvjZMd2Zg50" // <--- PASTE YOUR KEY HERE
+        }
+      };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body {
@@ -24,7 +34,6 @@
 </head>
   <body class="bg-gray-900 text-gray-100">
     <div id="root"></div>
-    <script src="./env.js"></script>
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
