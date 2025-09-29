@@ -4,6 +4,13 @@ import { PlayIcon } from './icons/PlayIcon';
 import { StopIcon } from './icons/StopIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
+import { auth, googleProvider } from '../firebase';
+// FIX: Use specific browser entry point for Firebase auth
+import { signInWithPopup, signOut } from 'firebase/auth/browser';
+import type { User } from 'firebase/auth/browser';
+import { SaveIcon } from './icons/SaveIcon';
+import { LoginIcon } from './icons/LoginIcon';
+import { LogoutIcon } from './icons/LogoutIcon';
 
 interface ControlsProps {
   onImport: (notation: string, file?: File) => void;
@@ -14,12 +21,14 @@ interface ControlsProps {
   isMusicLoaded: boolean;
   isPlaying: boolean;
   isLoading: boolean;
-  isApiKeyAvailable: boolean;
+  currentUser: User | null;
+  onSaveScore: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
   onImport, onPlay, onStop, onExportWav, onExportMidi, 
-  isMusicLoaded, isPlaying, isLoading, isApiKeyAvailable
+  isMusicLoaded, isPlaying, isLoading,
+  currentUser, onSaveScore
 }) => {
   const [notationText, setNotationText] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,6 +59,24 @@ const Controls: React.FC<ControlsProps> = ({
     }
   }
 
+  const handleLogin = async () => {
+    try {
+        await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+        console.error("Authentication error:", error);
+        alert("Could not log in. Please check the console for details, and ensure your Firebase configuration in `firebase.ts` is correct.");
+    }
+  };
+
+  const handleLogout = async () => {
+      try {
+          await signOut(auth);
+      } catch (error)
+      {
+          console.error("Sign out error:", error);
+      }
+  };
+
   const renderPlaybackControls = () => (
     <>
       {!isPlaying ? (
@@ -75,17 +102,12 @@ const Controls: React.FC<ControlsProps> = ({
     </div>
   );
 
-  const isImportDisabled = isLoading || !isApiKeyAvailable;
+  const isImportDisabled = isLoading;
 
   return (
     <div className="bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 space-y-6 h-full flex flex-col">
       <div>
         <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Import Music</h2>
-        {!isApiKeyAvailable && (
-          <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 text-sm rounded-md p-3 mb-4">
-            <strong>Action Required:</strong> Please set your Gemini API key in <code className="bg-gray-700 p-1 rounded text-xs">config.ts</code> to enable parsing.
-          </div>
-        )}
         <p className="text-sm text-gray-400 mb-4">
           Paste text notation or upload an image of sheet music, tabs, or sol-fa.
         </p>
@@ -113,12 +135,34 @@ const Controls: React.FC<ControlsProps> = ({
         </button>
       </div>
       
-      <div className="flex-grow">
-        <h2 className="text-xl font-semibold mb-3 text-teal-400">2. Control</h2>
+      <div>
+        <h2 className="text-xl font-semibold mb-3 text-teal-400">2. Control &amp; Save</h2>
         <div className="space-y-2">
+          <button onClick={onSaveScore} disabled={!isMusicLoaded || isLoading || isPlaying || !currentUser} className="w-full control-button bg-indigo-600 hover:bg-indigo-500">
+            <SaveIcon /> Save Score
+          </button>
           {renderPlaybackControls()}
           {renderExportControls()}
         </div>
+      </div>
+
+      <div className="mt-auto pt-6 border-t border-gray-700">
+        <h2 className="text-xl font-semibold mb-3 text-teal-400">3. Account</h2>
+        {currentUser ? (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-300">Logged in as</p>
+              <p className="font-medium truncate" title={currentUser.displayName || 'User'}>{currentUser.displayName}</p>
+            </div>
+            <button onClick={handleLogout} className="control-button bg-red-600 hover:bg-red-500 text-sm">
+              <LogoutIcon /> Logout
+            </button>
+          </div>
+        ) : (
+          <button onClick={handleLogin} className="w-full control-button bg-gray-700 hover:bg-gray-600">
+            <LoginIcon /> Login with Google
+          </button>
+        )}
       </div>
     </div>
   );

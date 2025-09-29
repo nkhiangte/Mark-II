@@ -1,6 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ParsedMusic } from '../types';
-import { API_KEY } from '../config';
 
 const musicSchema = {
   type: Type.OBJECT,
@@ -73,10 +72,6 @@ const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutM
 };
 
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
-  if (!API_KEY) {
-    throw new Error("Configuration needed: Your Gemini API key is missing. Please add it to config.ts.");
-  }
-  
   const prompt = `
     You are an expert music theorist and programmer with OCR capabilities.
     Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
@@ -96,7 +91,8 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
   `;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    // FIX: API key must be from process.env.API_KEY per guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const contents = file ? 
     { parts: [ {text: prompt}, await fileToGenerativePart(file), {text: `\nTextual description (if any): ${notationText}`}] } :
