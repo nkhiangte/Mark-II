@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { ParsedMusic } from './types';
-import { parseSheetMusic } from './services/geminiService';
+import { parseSheetMusic, extractTextFromImage } from './services/geminiService';
 import { SoundEngine } from './services/soundEngine';
 import { exportToWav, exportToMidi } from './services/exportService';
 import { SolfegeParser } from './services/solfegeParser';
@@ -21,12 +21,35 @@ const App: React.FC = () => {
   const [playbackTempo, setPlaybackTempo] = useState<number>(120);
   const [satbDebugData, setSatbDebugData] = useState<any | null>(null);
   const [selectedPart, setSelectedPart] = useState<string>('All');
+  const [notationText, setNotationText] = useState<string>('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState<string>('AI is parsing your music...');
+
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
   const parserRef = useRef(new SolfegeParser());
+  
+  const handleExtractText = async (file: File) => {
+    setIsLoading(true);
+    setLoadingMessage('Extracting text from image...');
+    setError(null);
+    setParsedMusic(null); // Clear previous results
+
+    try {
+      const extractedText = await extractTextFromImage(file);
+      setNotationText(extractedText);
+      setSelectedFile(null); // Clear the file after extraction, as its content is now in the textarea
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to extract text from image.');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('AI is parsing your music...');
+    }
+  };
 
   const handleImport = useCallback(async (notation: string, file?: File, format?: string, key?: string) => {
     setIsLoading(true);
+    setLoadingMessage('AI is parsing your music...');
     setError(null);
     setParsedMusic(null);
     setSatbDebugData(null);
@@ -36,12 +59,12 @@ const App: React.FC = () => {
     }
 
     try {
-      if (notation && !file && SolfegeParser.isSolfege(notation)) {
+      if (notation && SolfegeParser.isSolfege(notation)) {
         const parsedData = parserRef.current.parse(notation, key);
         setSatbDebugData(parsedData);
       }
 
-      const result = await parseSheetMusic(notation, file);
+      const result = await parseSheetMusic(notation);
       setParsedMusic(result);
       setPlaybackTempo(result.tempo);
       setSelectedPart('All');
@@ -102,6 +125,11 @@ const App: React.FC = () => {
         <div className="xl:w-1/3 w-full flex flex-col gap-8">
           <Controls 
             onImport={handleImport}
+            onExtractText={handleExtractText}
+            notationText={notationText}
+            onNotationTextChange={setNotationText}
+            selectedFile={selectedFile}
+            onSelectedFileChange={setSelectedFile}
             onPlay={handlePlay}
             onStop={handleStop}
             onExportWav={handleExportWav}
@@ -118,7 +146,7 @@ const App: React.FC = () => {
         </div>
         <div className="xl:w-2/3 w-full flex-grow flex flex-col">
             <div className="bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 min-h-[400px] flex items-center justify-center flex-grow">
-              {isLoading && <Loader />}
+              {isLoading && <Loader message={loadingMessage} />}
               {error && <div className="text-red-400 text-center">{error}</div>}
               {!isLoading && !error && parsedMusic && <SheetMusicViewer music={parsedMusic} />}
               {!isLoading && !error && !parsedMusic && (

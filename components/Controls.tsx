@@ -6,7 +6,12 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
 
 interface ControlsProps {
-  onImport: (notation: string, file?: File, format?: string, key?: string) => void;
+  onImport: (notation: string, format?: string, key?: string) => void;
+  onExtractText: (file: File) => void;
+  notationText: string;
+  onNotationTextChange: (text: string) => void;
+  selectedFile: File | null;
+  onSelectedFileChange: (file: File | null) => void;
   onPlay: () => void;
   onStop: () => void;
   onExportWav: () => void;
@@ -22,13 +27,12 @@ interface ControlsProps {
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
-  onImport, onPlay, onStop, onExportWav, onExportMidi, 
+  onImport, onExtractText, notationText, onNotationTextChange, selectedFile, onSelectedFileChange,
+  onPlay, onStop, onExportWav, onExportMidi, 
   isMusicLoaded, isPlaying, isLoading,
   tempo, onTempoChange,
   parts, selectedPart, onPartChange
 }) => {
-  const [notationText, setNotationText] = useState<string>('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [inputFormat, setInputFormat] = useState<'separate' | 'vertical' | 'mixed'>('separate');
   const [keySignature, setKeySignature] = useState('C');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,28 +68,28 @@ A: s, l, t,| d t, l,
   const loadExample = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const exampleType = event.target.value;
     if (exampleType in examples) {
-      setNotationText(examples[exampleType as keyof typeof examples]);
+      onNotationTextChange(examples[exampleType as keyof typeof examples]);
       
       if (exampleType === 'separate') setInputFormat('separate');
       else if (exampleType === 'vertical') setInputFormat('vertical');
       else if (exampleType === 'chords') setInputFormat('mixed');
     } else {
-      setNotationText('');
+      onNotationTextChange('');
     }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      setSelectedFile(event.target.files[0]);
+      onSelectedFileChange(event.target.files[0]);
     }
   };
   
   const handleImportClick = () => {
-    if (!notationText && !selectedFile) {
-        alert("Please provide some notation text or select a file to import.");
+    if (!notationText) {
+        alert("Please provide notation text to import. If you uploaded a file, extract the text first.");
         return;
     }
-    onImport(notationText, selectedFile || undefined, inputFormat, keySignature);
+    onImport(notationText, inputFormat, keySignature);
   };
   
   const handleFileSelectClick = () => {
@@ -93,7 +97,7 @@ A: s, l, t,| d t, l,
   };
   
   const clearFile = () => {
-    setSelectedFile(null);
+    onSelectedFileChange(null);
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
@@ -153,11 +157,11 @@ A: s, l, t,| d t, l,
       <div>
         <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Import Music</h2>
         <p className="text-sm text-gray-400 mb-4">
-          Paste text notation or upload an image of sheet music, tabs, or sol-fa.
+          Paste text notation or upload an image. If uploading, extract text before parsing.
         </p>
         <textarea
           value={notationText}
-          onChange={(e) => setNotationText(e.target.value)}
+          onChange={(e) => onNotationTextChange(e.target.value)}
           placeholder="e.g., C G Am F, guitar tabs, or 'd r m f s'..."
           className="w-full h-32 p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
           disabled={isImportDisabled}
@@ -204,9 +208,18 @@ A: s, l, t,| d t, l,
                     <button onClick={clearFile} className="ml-2 text-red-400 hover:text-red-300" disabled={isImportDisabled}>&times;</button>
                 </div>
             )}
+            {selectedFile && (
+              <button 
+                onClick={() => onExtractText(selectedFile)} 
+                disabled={isLoading} 
+                className="mt-2 w-full control-button bg-cyan-600 hover:bg-cyan-500"
+              >
+                Extract Text from Image
+              </button>
+            )}
         </div>
         <button onClick={handleImportClick} disabled={isImportDisabled} className="mt-4 w-full control-button bg-green-700 hover:bg-green-600 text-lg font-bold">
-          {isLoading ? 'Parsing...' : 'Parse & Import'}
+          {isLoading ? 'Processing...' : 'Parse & Import'}
         </button>
       </div>
       

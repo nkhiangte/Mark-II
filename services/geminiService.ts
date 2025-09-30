@@ -83,24 +83,63 @@ const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutM
     });
 };
 
-export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
+export const extractTextFromImage = async (file: File): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
+  }
+  
+  const prompt = `
+    You are an expert OCR system specializing in music. 
+    Your task is to extract all textual information from the provided image.
+    The image may contain standard staff notation, guitar tablature, or tonic sol-fa.
+    Present the output as plain text. 
+    Preserve the layout and structure of the original notation as closely as possible. 
+    Do not attempt to interpret or convert the notation, just extract the text you see.
+  `;
+  
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const imagePart = await fileToGenerativePart(file);
+
+    const apiCall = ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [{ text: prompt }, imagePart] },
+    });
+
+    const response: GenerateContentResponse = await generateWithTimeout(
+        apiCall,
+        120000, // 2 minutes timeout for OCR
+        "The AI model took too long to respond while extracting text from the image."
+    );
+
+    return response.text;
+  } catch (error) {
+    console.error("Error calling Gemini API for text extraction:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to extract text from image: ${error.message}`);
+    }
+    throw new Error("Failed to extract text from image. The AI model could not process the input.");
+  }
+};
+
+
+export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic> => {
   if (!process.env.API_KEY) {
     throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
   }
   
   let processedNotationText = notationText;
   // Pre-process if the input is text-only and looks like solfege
-  if (notationText && !file && SolfegeParser.isSolfege(notationText)) {
+  if (notationText && SolfegeParser.isSolfege(notationText)) {
       processedNotationText = SolfegeParser.preProcessForAI(notationText);
   }
 
   const prompt = `
-    You are an expert music theorist and programmer with OCR capabilities.
+    You are an expert music theorist and programmer.
     Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
 
-    The input can be:
-    1. Text-based notation (like guitar tablature, chord names, or tonic sol-fa). If it is pre-processed sol-fa, that information will be provided.
-    2. An image file. If an image is provided, perform OCR to extract the musical content. The image could contain standard staff notation, guitar tablature, or tonic sol-fa text.
+    The input is text-based notation (like guitar tablature, chord names, or tonic sol-fa).
 
     Key Instructions:
     - For SATB or other multi-part music, create a separate entry in the 'parts' array for each voice or instrument (e.g., 'Soprano', 'Alto', 'Tenor', 'Bass').
@@ -117,9 +156,7 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-    const contents = file ? 
-    { parts: [ {text: prompt}, await fileToGenerativePart(file), {text: `\nTextual description (if any): ${notationText}`}] } :
-    { parts: [ {text: prompt}, {text: processedNotationText} ] };
+    const contents = { parts: [ {text: prompt}, {text: processedNotationText} ] };
 
     const apiCall = ai.models.generateContent({
       model: 'gemini-2.5-flash',
