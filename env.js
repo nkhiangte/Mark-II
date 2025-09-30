@@ -1,2 +1,2 @@
-// This file is deprecated and can be safely deleted.
-// API Key configuration has been moved to `config.ts`.
+// This file is deprecated and is not used by the application.
+// It can be safely ignored.

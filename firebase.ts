@@ -1,7 +1,7 @@
-import { initializeApp } from "firebase/app";
-// FIX: Use specific browser entry point for Firebase auth to solve import errors
-import { getAuth, GoogleAuthProvider } from "firebase/auth/browser";
-import { getFirestore } from "firebase/firestore";
+// FIX: Using firebase compat library to resolve module errors.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
 
 // --------------------------------------------------------------------------
 //  Firebase Configuration
@@ -20,18 +20,20 @@ const firebaseConfig = {
   apiKey: "AIzaSyAl04Pg8HSxRvFZk9_mbc76TbpB2uJdj2Y",
   authDomain: "bmsweb-3b5ea.firebaseapp.com",
   projectId: "bmsweb-3b5ea",
-  storageBucket: "bmsweb-3b5ea.firebasestorage.app",
+  storageBucket: "bmsweb-3b5ea.appspot.com",
   messagingSenderId: "736692258464",
   appId: "1:736692258464:web:efe46c77f73a463047abc5",
   measurementId: "G-104DTR3HKG"
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 
 // Initialize Firebase services
-const auth = getAuth(app);
-const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
+const auth = firebase.auth();
+const db = firebase.firestore();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 export { auth, db, googleProvider };

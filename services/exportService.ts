@@ -94,10 +94,10 @@ const bufferToWav = (buffer: AudioBuffer): Blob => {
   }
 };
 
-export const exportToWav = async (music: ParsedMusic) => {
+export const exportToWav = async (music: ParsedMusic, tempo: number) => {
   const totalDuration = music.measures.reduce((total, measure) => {
     return total + measure.notes.reduce((measureTotal, note) => {
-      const beatDuration = 60 / music.tempo;
+      const beatDuration = 60 / tempo;
       const durations: { [key: string]: number } = { 'whole': 4, 'half': 2, 'quarter': 1, 'eighth': 0.5, 'sixteenth': 0.25 };
       return measureTotal + (durations[note.duration] || 0) * beatDuration;
     }, 0);
@@ -115,7 +115,7 @@ export const exportToWav = async (music: ParsedMusic) => {
   const tempSoundEngine = new SoundEngine();
   (tempSoundEngine as any).audioContext = offlineCtx; // Override context
   
-  tempSoundEngine.play(music, () => {});
+  tempSoundEngine.play(music, tempo, () => {});
 
   const renderedBuffer = await offlineCtx.startRendering();
   const wavBlob = bufferToWav(renderedBuffer);

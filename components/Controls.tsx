@@ -4,13 +4,6 @@ import { PlayIcon } from './icons/PlayIcon';
 import { StopIcon } from './icons/StopIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
-import { auth, googleProvider } from '../firebase';
-// FIX: Use specific browser entry point for Firebase auth
-import { signInWithPopup, signOut } from 'firebase/auth/browser';
-import type { User } from 'firebase/auth/browser';
-import { SaveIcon } from './icons/SaveIcon';
-import { LoginIcon } from './icons/LoginIcon';
-import { LogoutIcon } from './icons/LogoutIcon';
 
 interface ControlsProps {
   onImport: (notation: string, file?: File) => void;
@@ -21,14 +14,14 @@ interface ControlsProps {
   isMusicLoaded: boolean;
   isPlaying: boolean;
   isLoading: boolean;
-  currentUser: User | null;
-  onSaveScore: () => void;
+  tempo: number;
+  onTempoChange: (newTempo: number) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
   onImport, onPlay, onStop, onExportWav, onExportMidi, 
   isMusicLoaded, isPlaying, isLoading,
-  currentUser, onSaveScore
+  tempo, onTempoChange
 }) => {
   const [notationText, setNotationText] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -58,24 +51,6 @@ const Controls: React.FC<ControlsProps> = ({
         fileInputRef.current.value = "";
     }
   }
-
-  const handleLogin = async () => {
-    try {
-        await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-        console.error("Authentication error:", error);
-        alert("Could not log in. Please check the console for details, and ensure your Firebase configuration in `firebase.ts` is correct.");
-    }
-  };
-
-  const handleLogout = async () => {
-      try {
-          await signOut(auth);
-      } catch (error)
-      {
-          console.error("Sign out error:", error);
-      }
-  };
 
   const renderPlaybackControls = () => (
     <>
@@ -135,34 +110,41 @@ const Controls: React.FC<ControlsProps> = ({
         </button>
       </div>
       
-      <div>
-        <h2 className="text-xl font-semibold mb-3 text-teal-400">2. Control &amp; Save</h2>
-        <div className="space-y-2">
-          <button onClick={onSaveScore} disabled={!isMusicLoaded || isLoading || isPlaying || !currentUser} className="w-full control-button bg-indigo-600 hover:bg-indigo-500">
-            <SaveIcon /> Save Score
-          </button>
-          {renderPlaybackControls()}
-          {renderExportControls()}
-        </div>
-      </div>
-
-      <div className="mt-auto pt-6 border-t border-gray-700">
-        <h2 className="text-xl font-semibold mb-3 text-teal-400">3. Account</h2>
-        {currentUser ? (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-300">Logged in as</p>
-              <p className="font-medium truncate" title={currentUser.displayName || 'User'}>{currentUser.displayName}</p>
+      <div className="flex-grow">
+        <h2 className="text-xl font-semibold mb-3 text-teal-400">2. Control</h2>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="tempo-slider" className="block text-sm font-medium text-gray-400 mb-2">
+                Tempo (BPM): <span className="font-bold text-gray-200">{tempo}</span>
+            </label>
+            <div className="flex items-center gap-4">
+                <input
+                    id="tempo-slider"
+                    type="range"
+                    min="40"
+                    max="240"
+                    value={tempo}
+                    onChange={(e) => onTempoChange(Number(e.target.value))}
+                    disabled={!isMusicLoaded || isLoading || isPlaying}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-teal-400 [&::-moz-range-thumb]:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <input
+                    type="number"
+                    min="40"
+                    max="240"
+                    value={tempo}
+                    onChange={(e) => onTempoChange(Number(e.target.value))}
+                    disabled={!isMusicLoaded || isLoading || isPlaying}
+                    className="w-20 p-1 bg-gray-900 border border-gray-600 rounded-md text-center focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
+                />
             </div>
-            <button onClick={handleLogout} className="control-button bg-red-600 hover:bg-red-500 text-sm">
-              <LogoutIcon /> Logout
-            </button>
           </div>
-        ) : (
-          <button onClick={handleLogin} className="w-full control-button bg-gray-700 hover:bg-gray-600">
-            <LoginIcon /> Login with Google
-          </button>
-        )}
+          
+          <div className="space-y-2 pt-4">
+            {renderPlaybackControls()}
+            {renderExportControls()}
+          </div>
+        </div>
       </div>
     </div>
   );

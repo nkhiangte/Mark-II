@@ -1,3 +1,4 @@
+
 import { ParsedMusic, Note } from '../types';
 
 // A4 = 440 Hz
@@ -76,12 +77,12 @@ export class SoundEngine {
     return DURATION_MAP[duration] * secondsPerQuarter;
   }
 
-  play(music: ParsedMusic, onEnded: () => void) {
+  play(music: ParsedMusic, tempo: number, onEnded: () => void) {
     if (!this.audioContext) return;
     this.stop();
     this.onEndedCallback = onEnded;
 
-    const { tempo, measures } = music;
+    const { measures } = music;
     let currentTime = this.audioContext.currentTime + 0.1; // Start with a small delay
     let totalDuration = 0.1;
 
