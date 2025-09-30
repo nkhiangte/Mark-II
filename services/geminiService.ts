@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ParsedMusic } from '../types';
 
@@ -72,6 +73,10 @@ const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutM
 };
 
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
+  }
+  
   const prompt = `
     You are an expert music theorist and programmer with OCR capabilities.
     Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
@@ -91,7 +96,6 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
   `;
 
   try {
-    // FIX: API key must be from process.env.API_KEY per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const contents = file ? 
