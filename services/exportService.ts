@@ -1,6 +1,7 @@
 
-import { ParsedMusic } from '../types';
-import { SoundEngine } from './soundEngine'; // For offline rendering logic
+import { ParsedMusic, Note } from '../types';
+
+declare const Tone: any;
 
 // Function to convert base64 to a Blob for download
 const b64toBlob = (b64Data: string, contentType = '', sliceSize = 512) => {
@@ -94,30 +95,53 @@ const bufferToWav = (buffer: AudioBuffer): Blob => {
   }
 };
 
+const DURATION_TO_TONE: Record<Note['duration'], string> = {
+    'whole': '1n', 'half': '2n', 'quarter': '4n', 'eighth': '8n', 'sixteenth': '16n'
+};
+
 export const exportToWav = async (music: ParsedMusic, tempo: number) => {
-  const totalDuration = music.measures.reduce((total, measure) => {
-    return total + measure.notes.reduce((measureTotal, note) => {
-      const beatDuration = 60 / tempo;
-      const durations: { [key: string]: number } = { 'whole': 4, 'half': 2, 'quarter': 1, 'eighth': 0.5, 'sixteenth': 0.25 };
-      return measureTotal + (durations[note.duration] || 0) * beatDuration;
-    }, 0);
-  }, 0);
-  
-  const OfflineAudioContext = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
-  if (!OfflineAudioContext) {
-    alert('Offline audio rendering is not supported in this browser.');
-    return;
-  }
+    if (typeof Tone === 'undefined' || typeof Tone.Offline === 'undefined') {
+        alert('Audio library (Tone.js) has not loaded. Cannot export to WAV.');
+        return;
+    }
 
-  const offlineCtx = new OfflineAudioContext(2, 44100 * (totalDuration + 1), 44100);
-  
-  // A bit of a hack: re-instantiate sound engine logic for offline context
-  const tempSoundEngine = new SoundEngine();
-  (tempSoundEngine as any).audioContext = offlineCtx; // Override context
-  
-  tempSoundEngine.play(music, tempo, () => {});
+    const notes = music.measures.flatMap(m => m.notes);
+    let totalDuration = 0;
+    
+    // Temporarily set Tone's transport for duration calculation, then reset
+    const originalBpm = Tone.Transport.bpm.value;
+    Tone.Transport.bpm.value = tempo;
+    notes.forEach(note => {
+        totalDuration += Tone.Time(DURATION_TO_TONE[note.duration]).toSeconds();
+    });
+    Tone.Transport.bpm.value = originalBpm;
+    
+    try {
+        const buffer = await Tone.Offline(async (transport: any) => {
+            const offlineSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+            transport.bpm.value = tempo;
 
-  const renderedBuffer = await offlineCtx.startRendering();
-  const wavBlob = bufferToWav(renderedBuffer);
-  downloadBlob(wavBlob, 'music.wav');
+            const part = new transport.Part((time: number, value: any) => {
+                if (value.pitch !== 'rest') {
+                    offlineSynth.triggerAttackRelease(value.pitch, value.duration, time);
+                }
+            }, []).start(0);
+
+            let currentTime = 0;
+            notes.forEach(note => {
+                const toneDuration = DURATION_TO_TONE[note.duration];
+                part.add(currentTime, { pitch: note.pitch, duration: toneDuration });
+                currentTime += Tone.Time(toneDuration).toSeconds();
+            });
+
+            transport.start();
+        }, totalDuration + 0.1); // Add a small buffer for release tails
+
+        const wavBlob = bufferToWav(buffer);
+        downloadBlob(wavBlob, 'music.wav');
+
+    } catch (e) {
+        console.error("Error rendering WAV file with Tone.Offline:", e);
+        alert("An error occurred while rendering the WAV file.");
+    }
 };

@@ -39,15 +39,15 @@ const App: React.FC = () => {
     }
   }, [isPlaying]);
 
-  const handlePlay = useCallback(() => {
+  const handlePlay = useCallback(async () => {
     if (!parsedMusic) return;
 
     if (!soundEngineRef.current) {
       soundEngineRef.current = new SoundEngine();
     }
     
-    soundEngineRef.current.play(parsedMusic, playbackTempo, () => setIsPlaying(false));
     setIsPlaying(true);
+    await soundEngineRef.current.play(parsedMusic, playbackTempo, () => setIsPlaying(false));
   }, [parsedMusic, playbackTempo]);
 
   const handleStop = useCallback(() => {
