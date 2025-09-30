@@ -7,9 +7,13 @@ export interface Measure {
   notes: Note[];
 }
 
+export interface Part {
+  partName: string;
+  measures: Measure[];
+}
+
 export interface ParsedMusic {
   tempo: number;
   timeSignature: string;
-  measures: Measure[];
-  midiBase64: string;
+  parts: Part[];
 }

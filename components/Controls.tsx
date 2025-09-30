@@ -6,7 +6,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
 
 interface ControlsProps {
-  onImport: (notation: string, file?: File) => void;
+  onImport: (notation: string, file?: File, format?: string, key?: string) => void;
   onPlay: () => void;
   onStop: () => void;
   onExportWav: () => void;
@@ -16,16 +16,63 @@ interface ControlsProps {
   isLoading: boolean;
   tempo: number;
   onTempoChange: (newTempo: number) => void;
+  parts: string[];
+  selectedPart: string;
+  onPartChange: (newPart: string) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
   onImport, onPlay, onStop, onExportWav, onExportMidi, 
   isMusicLoaded, isPlaying, isLoading,
-  tempo, onTempoChange
+  tempo, onTempoChange,
+  parts, selectedPart, onPartChange
 }) => {
   const [notationText, setNotationText] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [inputFormat, setInputFormat] = useState<'separate' | 'vertical' | 'mixed'>('separate');
+  const [keySignature, setKeySignature] = useState('C');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const examples = {
+    separate: `Doh is Eb
+S: d:r.m | m:f.s | s:l.s | f:m.r
+A: s:s.s | d:d.d | d:d.d | l:s.f
+T: m:f.s | s:l.s | s:s.d'| d':t.l
+B: d:d.d | d:d.d | d:l.t,| d:s.s`,
+    vertical: `Doh is G
+// Each line represents a voice part (S, A, T, B) in order.
+// Notes in the same column are played together.
+s.s l.l | s.f m.r | d
+m.m f.f | m.r d.t | d
+d'.d'd'.d'| s.s s.s | s
+d.d d.d | d.g g.g | d`,
+    chords: `Doh is C
+// This example mixes explicit part indicators with vertical harmony for the chorus.
+// Verse 1
+S: d r m | f m r
+A: s, l, t,| d t, l,
+
+// Chorus
+| d m s d'| t l s - |
+| s, d m s | s f m - |
+| m s d' m'| r' d' t - |
+| d d d d | g, a, s, - |`
+  };
+
+  const keys = ['C', 'G', 'D', 'A', 'F', 'Bb', 'Eb'];
+
+  const loadExample = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const exampleType = event.target.value;
+    if (exampleType in examples) {
+      setNotationText(examples[exampleType as keyof typeof examples]);
+      
+      if (exampleType === 'separate') setInputFormat('separate');
+      else if (exampleType === 'vertical') setInputFormat('vertical');
+      else if (exampleType === 'chords') setInputFormat('mixed');
+    } else {
+      setNotationText('');
+    }
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -38,7 +85,7 @@ const Controls: React.FC<ControlsProps> = ({
         alert("Please provide some notation text or select a file to import.");
         return;
     }
-    onImport(notationText, selectedFile || undefined);
+    onImport(notationText, selectedFile || undefined, inputFormat, keySignature);
   };
   
   const handleFileSelectClick = () => {
@@ -76,6 +123,28 @@ const Controls: React.FC<ControlsProps> = ({
       </button>
     </div>
   );
+  
+  const renderPartSelector = () => (
+    isMusicLoaded && parts.length > 0 && (
+          <div>
+              <label htmlFor="part-selector" className="block text-sm font-medium text-gray-400 mb-2">
+                  Playback/Export Part:
+              </label>
+              <select
+                  id="part-selector"
+                  value={selectedPart}
+                  onChange={(e) => onPartChange(e.target.value)}
+                  disabled={!isMusicLoaded || isLoading || isPlaying}
+                  className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
+              >
+                  <option value="All">All Parts</option>
+                  {parts.map(partName => (
+                      <option key={partName} value={partName}>{partName}</option>
+                  ))}
+              </select>
+          </div>
+      )
+  );
 
   const isImportDisabled = isLoading;
 
@@ -93,6 +162,37 @@ const Controls: React.FC<ControlsProps> = ({
           className="w-full h-32 p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
           disabled={isImportDisabled}
         />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div>
+                <label htmlFor="keySignature" className="block text-sm font-medium mb-2 text-gray-400">Key Signature:</label>
+                <select 
+                    id="keySignature" 
+                    value={keySignature}
+                    onChange={(e) => setKeySignature(e.target.value)}
+                    className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
+                    disabled={isImportDisabled}
+                >
+                    {keys.map(k => <option key={k} value={k}>{k} Major</option>)}
+                </select>
+            </div>
+             <div>
+                <label htmlFor="exampleSelector" className="block text-sm font-medium mb-2 text-gray-400">SATB Notation Examples:</label>
+                <select 
+                    id="exampleSelector" 
+                    onChange={loadExample}
+                    defaultValue=""
+                    className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
+                    disabled={isImportDisabled}
+                >
+                    <option value="">Select an example...</option>
+                    <option value="separate">Separate Parts Example</option>
+                    <option value="vertical">Vertical Harmony Example</option>
+                    <option value="chords">Chordal Example</option>
+                </select>
+            </div>
+        </div>
+        
         <div className="mt-4">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.musicxml,.xml" disabled={isImportDisabled} />
             <button onClick={handleFileSelectClick} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isImportDisabled}>
@@ -140,6 +240,8 @@ const Controls: React.FC<ControlsProps> = ({
             </div>
           </div>
           
+          {renderPartSelector()}
+
           <div className="space-y-2 pt-4">
             {renderPlaybackControls()}
             {renderExportControls()}

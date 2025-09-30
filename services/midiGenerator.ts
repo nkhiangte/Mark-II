@@ -1,4 +1,4 @@
-import { Note, Measure } from '../types';
+import { Note, Measure, Part } from '../types';
 
 // prettier-ignore
 const PITCH_TO_MIDI: { [key: string]: number } = {
@@ -13,38 +13,54 @@ const PITCH_TO_MIDI: { [key: string]: number } = {
     'C8': 108, 'C#8': 109, 'Db8': 109, 'D8': 110, 'D#8': 111, 'Eb8': 111, 'E8': 112, 'F8': 113, 'F#8': 114, 'Gb8': 114, 'G8': 115, 'G#8': 116, 'Ab8': 116, 'A8': 117, 'A#8': 118, 'Bb8': 118, 'B8': 119
 };
 
-
 const pitchToMidiNumber = (pitch: string): number | null => {
     return PITCH_TO_MIDI[pitch] || null;
 };
 
 export class MIDIGenerator {
-    generateMIDI(measures: Measure[], tempo: number = 120): Uint8Array {
-        const notes = measures.flatMap(m => m.notes);
-        const midiHeader = this.createMidiHeader();
-        const trackData = this.createTrackData(notes, tempo);
-        const midiData = new Uint8Array([...midiHeader, ...trackData]);
-        return midiData;
+    generateMIDI(parts: Part[], tempo: number = 120, targetPartName?: string): Uint8Array {
+        const partsToProcess = targetPartName && targetPartName.toLowerCase() !== 'all'
+            ? parts.filter(p => p.partName.toLowerCase() === targetPartName.toLowerCase())
+            : parts;
+            
+        if (partsToProcess.length === 0) {
+            console.warn("No parts to process for MIDI generation.");
+            return new Uint8Array();
+        }
+
+        const header = this.createMidiHeader(partsToProcess.length);
+        
+        const trackChunks = partsToProcess.map((part, index) => {
+            // Tempo event should only be in the first track of a Format 1 MIDI file.
+            const includeTempo = index === 0;
+            return this.createTrackChunk(part.measures, includeTempo ? tempo : undefined);
+        });
+        
+        const allTrackBytes = trackChunks.flat();
+
+        return new Uint8Array([...header, ...allTrackBytes]);
     }
 
-    private createMidiHeader(): Uint8Array {
+    private createMidiHeader(numTracks: number): Uint8Array {
         return new Uint8Array([
             0x4D, 0x54, 0x68, 0x64, // "MThd"
             0x00, 0x00, 0x00, 0x06, // Header length
-            0x00, 0x00,             // Format 0 (single track)
-            0x00, 0x01,             // 1 track
+            0x00, 0x01,             // Format 1 (multi-track)
+            (numTracks >> 8) & 0xFF, numTracks & 0xFF, // Number of tracks
             0x00, 0x60              // 96 ticks per quarter note
         ]);
     }
 
-    private createTrackData(notes: Note[], tempo: number): Uint8Array {
+    private createTrackChunk(measures: Measure[], tempo?: number): number[] {
+        const notes = measures.flatMap(m => m.notes);
         const eventData: number[] = [];
         
-        // Set tempo
-        const microsecondsPerBeat = Math.floor(60000000 / tempo);
-        eventData.push(...this.writeVariableLength(0));
-        eventData.push(0xFF, 0x51, 0x03);
-        eventData.push(...this.writeTempo(microsecondsPerBeat));
+        if (tempo) {
+            const microsecondsPerBeat = Math.floor(60000000 / tempo);
+            eventData.push(...this.writeVariableLength(0)); // delta time
+            eventData.push(0xFF, 0x51, 0x03); // set tempo
+            eventData.push(...this.writeTempo(microsecondsPerBeat));
+        }
         
         let accumulatedDeltaTicks = 0;
         
@@ -66,14 +82,14 @@ export class MIDIGenerator {
             // Note On event
             eventData.push(...this.writeVariableLength(accumulatedDeltaTicks));
             eventData.push(0x90, midiNumber, 0x64); // Channel 1, Note On, velocity 100
-            accumulatedDeltaTicks = 0; // Reset delta time
+            accumulatedDeltaTicks = 0; // Reset delta time for simultaneous notes if any (not handled here)
 
             // Note Off event
             eventData.push(...this.writeVariableLength(durationTicks));
             eventData.push(0x80, midiNumber, 0x00); // Channel 1, Note Off, velocity 0
         });
         
-        // End of track
+        // End of track meta-event
         eventData.push(...this.writeVariableLength(0));
         eventData.push(0xFF, 0x2F, 0x00);
         
@@ -82,7 +98,7 @@ export class MIDIGenerator {
             ...this.write32Bit(eventData.length)
         ];
         
-        return new Uint8Array([...trackHeader, ...eventData]);
+        return [...trackHeader, ...eventData];
     }
 
     private durationToTicks(duration: Note['duration']): number {
@@ -101,12 +117,15 @@ export class MIDIGenerator {
         let buffer = [];
         let v = value;
 
-        buffer.push(v & 0x7F);
-        v >>= 7;
+        if (v === 0) return [0];
 
         while (v > 0) {
-            buffer.push((v & 0x7F) | 0x80);
+            let byte = v & 0x7F;
             v >>= 7;
+            if (buffer.length > 0) {
+                byte |= 0x80;
+            }
+            buffer.push(byte);
         }
 
         return buffer.reverse();

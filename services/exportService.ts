@@ -1,5 +1,5 @@
 
-import { ParsedMusic, Note } from '../types';
+import { ParsedMusic, Note, Part } from '../types';
 
 declare const Tone: any;
 
@@ -99,43 +99,59 @@ const DURATION_TO_TONE: Record<Note['duration'], string> = {
     'whole': '1n', 'half': '2n', 'quarter': '4n', 'eighth': '8n', 'sixteenth': '16n'
 };
 
-export const exportToWav = async (music: ParsedMusic, tempo: number) => {
+export const exportToWav = async (music: ParsedMusic, tempo: number, targetPartName?: string) => {
     if (typeof Tone === 'undefined' || typeof Tone.Offline === 'undefined') {
         alert('Audio library (Tone.js) has not loaded. Cannot export to WAV.');
         return;
     }
 
-    const notes = music.measures.flatMap(m => m.notes);
-    let totalDuration = 0;
-    
-    // Temporarily set Tone's transport for duration calculation, then reset
+    const partsToRender = targetPartName && targetPartName.toLowerCase() !== 'all'
+        ? music.parts.filter(p => p.partName.toLowerCase() === targetPartName.toLowerCase())
+        : music.parts;
+        
+    if (partsToRender.length === 0) {
+        alert("No parts available to export.");
+        return;
+    }
+
+    let maxDuration = 0;
+     // Temporarily set Tone's transport for duration calculation, then reset
     const originalBpm = Tone.Transport.bpm.value;
     Tone.Transport.bpm.value = tempo;
-    notes.forEach(note => {
-        totalDuration += Tone.Time(DURATION_TO_TONE[note.duration]).toSeconds();
+
+    partsToRender.forEach(part => {
+        const notes = part.measures.flatMap(m => m.notes);
+        const partDuration = notes.reduce((total, note) => total + Tone.Time(DURATION_TO_TONE[note.duration]).toSeconds(), 0);
+        if (partDuration > maxDuration) {
+            maxDuration = partDuration;
+        }
     });
+
     Tone.Transport.bpm.value = originalBpm;
-    
+
     try {
         const buffer = await Tone.Offline(async (transport: any) => {
             const offlineSynth = new Tone.PolySynth(Tone.Synth).toDestination();
             transport.bpm.value = tempo;
 
-            const part = new transport.Part((time: number, value: any) => {
-                if (value.pitch !== 'rest') {
-                    offlineSynth.triggerAttackRelease(value.pitch, value.duration, time);
-                }
-            }, []).start(0);
+            partsToRender.forEach(partData => {
+                const notes = partData.measures.flatMap(m => m.notes);
+                const part = new transport.Part((time: number, value: any) => {
+                    if (value.pitch !== 'rest') {
+                        offlineSynth.triggerAttackRelease(value.pitch, value.duration, time);
+                    }
+                }, []).start(0);
 
-            let currentTime = 0;
-            notes.forEach(note => {
-                const toneDuration = DURATION_TO_TONE[note.duration];
-                part.add(currentTime, { pitch: note.pitch, duration: toneDuration });
-                currentTime += Tone.Time(toneDuration).toSeconds();
+                let currentTime = 0;
+                notes.forEach(note => {
+                    const toneDuration = DURATION_TO_TONE[note.duration];
+                    part.add(currentTime, { pitch: note.pitch, duration: toneDuration });
+                    currentTime += Tone.Time(toneDuration).toSeconds();
+                });
             });
 
             transport.start();
-        }, totalDuration + 0.1); // Add a small buffer for release tails
+        }, maxDuration + 0.1); // Add a small buffer for release tails
 
         const wavBlob = bufferToWav(buffer);
         downloadBlob(wavBlob, 'music.wav');

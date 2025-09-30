@@ -40,7 +40,7 @@ export class SoundEngine {
         }
     }
 
-    async play(music: ParsedMusic, tempo: number, onEnded: () => void) {
+    async play(music: ParsedMusic, tempo: number, onEnded: () => void, targetPartName?: string) {
         if (!this.isInitialized) {
             await this.initialize();
         }
@@ -56,32 +56,45 @@ export class SoundEngine {
 
         Tone.Transport.bpm.value = tempo;
 
-        const notes = music.measures.flatMap(m => m.notes);
-        
-        const part = new Tone.Part((time, value) => {
-            if (value.pitch !== 'rest') {
-                this.synth.triggerAttackRelease(
-                    value.pitch, 
-                    value.duration, 
-                    time
-                );
+        const partsToPlay = targetPartName && targetPartName.toLowerCase() !== 'all'
+            ? music.parts.filter(p => p.partName.toLowerCase() === targetPartName.toLowerCase())
+            : music.parts;
+
+        if (partsToPlay.length === 0) {
+            onEnded();
+            return;
+        }
+
+        let maxDuration = 0;
+
+        partsToPlay.forEach(partData => {
+            const notes = partData.measures.flatMap(m => m.notes);
+            const part = new Tone.Part((time: any, value: any) => {
+                if (value.pitch !== 'rest') {
+                    this.synth.triggerAttackRelease(
+                        value.pitch, 
+                        value.duration, 
+                        time
+                    );
+                }
+            }, []).start(0);
+
+            let currentTime = 0;
+            notes.forEach(note => {
+                const toneDuration = DURATION_TO_TONE[note.duration];
+                part.add(currentTime, { pitch: note.pitch, duration: toneDuration });
+                currentTime += Tone.Time(toneDuration).toSeconds();
+            });
+
+            if (currentTime > maxDuration) {
+                maxDuration = currentTime;
             }
-        }, []).start(0);
-        
-        let totalDuration = 0;
-        let currentTime = 0;
-        notes.forEach(note => {
-            const toneDuration = DURATION_TO_TONE[note.duration];
-            part.add(currentTime, { pitch: note.pitch, duration: toneDuration });
-            const durationInSeconds = Tone.Time(toneDuration).toSeconds();
-            currentTime += durationInSeconds;
-            totalDuration = currentTime;
         });
 
-        // Schedule the transport to stop after the last note has finished playing.
+        // Schedule the transport to stop after the longest part has finished playing.
         Tone.Transport.scheduleOnce(() => {
             this.stop(false); // don't call onEnded manually, let the event handle it
-        }, totalDuration);
+        }, maxDuration);
         
         Tone.Transport.start();
     }

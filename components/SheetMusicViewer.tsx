@@ -87,12 +87,19 @@ const TrebleClef = ({ x, y }: { x: number; y: number; }) => (
 );
 
 const SheetMusicViewer: React.FC<SheetMusicViewerProps> = ({ music }) => {
+    // For now, display only the first part until multi-staff rendering is implemented.
+    const partToDisplay = music.parts[0];
+    if (!partToDisplay) {
+        return <div className="text-gray-500 text-center">No musical parts to display.</div>;
+    }
+    const measures = partToDisplay.measures;
+
     const lines: Measure[][] = [];
     let currentLine: Measure[] = [];
     let currentWidth = 100; // Start with space for clef
     const MAX_WIDTH = 980;
 
-    music.measures.forEach(measure => {
+    measures.forEach(measure => {
         const measureWidth = measure.notes.reduce((w, note) => w + DURATION_WIDTH[note.duration], 0) + 20; // notes + barline space
         if (currentWidth + measureWidth > MAX_WIDTH && currentLine.length > 0) {
             lines.push(currentLine);
@@ -106,13 +113,16 @@ const SheetMusicViewer: React.FC<SheetMusicViewerProps> = ({ music }) => {
         lines.push(currentLine);
     }
     
-    const totalHeight = lines.length * (STAFF_HEIGHT + 60) + STAFF_TOP;
+    const totalHeight = lines.length * (STAFF_HEIGHT + 60) + STAFF_TOP + 30; // Added space for title
 
     return (
         <div className="w-full h-full overflow-auto">
             <svg width="100%" height="auto" viewBox={`0 0 1000 ${totalHeight}`}>
+                <text x="500" y="25" textAnchor="middle" fill="rgba(255,255,255,0.8)" fontSize="20" fontWeight="bold">
+                    Displaying Part: {partToDisplay.partName}
+                </text>
                 {lines.map((measuresOnLine, lineIndex) => {
-                    const yOffset = lineIndex * (STAFF_HEIGHT + 60);
+                    const yOffset = lineIndex * (STAFF_HEIGHT + 60) + 30; // Offset for title
                     let currentX = 80;
                     
                     return (

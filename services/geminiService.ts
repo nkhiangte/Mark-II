@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ParsedMusic } from '../types';
 import { SolfegeParser } from './solfegeParser';
-import { MIDIGenerator } from './midiGenerator';
 
 const musicSchema = {
   type: Type.OBJECT,
@@ -15,35 +14,49 @@ const musicSchema = {
       type: Type.STRING,
       description: "The time signature, e.g., '4/4' or '3/4'.",
     },
-    measures: {
+    parts: {
       type: Type.ARRAY,
+      description: "An array of musical parts. For SATB, this would be 4 parts. For solo piano, it might be 2 (right and left hand).",
       items: {
         type: Type.OBJECT,
         properties: {
-          notes: {
+          partName: {
+            type: Type.STRING,
+            description: "The name of the part, e.g., 'Soprano', 'Alto', 'Tenor', 'Bass', 'Piano Right Hand'.",
+          },
+          measures: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                pitch: {
-                  type: Type.STRING,
-                  description: "The pitch of the note in Scientific Pitch Notation (e.g., 'C4', 'F#5'). Use 'rest' for rests.",
-                },
-                duration: {
-                  type: Type.STRING,
-                  enum: ['whole', 'half', 'quarter', 'eighth', 'sixteenth'],
-                  description: "The duration of the note (whole, half, quarter, eighth, sixteenth).",
+                notes: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      pitch: {
+                        type: Type.STRING,
+                        description: "The pitch of the note in Scientific Pitch Notation (e.g., 'C4', 'F#5'). Use 'rest' for rests.",
+                      },
+                      duration: {
+                        type: Type.STRING,
+                        enum: ['whole', 'half', 'quarter', 'eighth', 'sixteenth'],
+                        description: "The duration of the note (whole, half, quarter, eighth, sixteenth).",
+                      },
+                    },
+                    required: ['pitch', 'duration'],
+                  },
                 },
               },
-              required: ['pitch', 'duration'],
+              required: ['notes'],
             },
           },
         },
-        required: ['notes'],
+        required: ['partName', 'measures'],
       },
     },
   },
-  required: ['tempo', 'timeSignature', 'measures'],
+  required: ['tempo', 'timeSignature', 'parts'],
 };
 
 const fileToGenerativePart = async (file: File) => {
@@ -70,15 +83,6 @@ const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutM
     });
 };
 
-const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
-}
-
 export const parseSheetMusic = async (notationText: string, file?: File): Promise<ParsedMusic> => {
   if (!process.env.API_KEY) {
     throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
@@ -99,6 +103,8 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
     2. An image file. If an image is provided, perform OCR to extract the musical content. The image could contain standard staff notation, guitar tablature, or tonic sol-fa text.
 
     Key Instructions:
+    - For SATB or other multi-part music, create a separate entry in the 'parts' array for each voice or instrument (e.g., 'Soprano', 'Alto', 'Tenor', 'Bass').
+    - If it is a solo instrument piece (like piano), you can create one part named 'main' or similar.
     - Convert all pitches to Scientific Pitch Notation (e.g., C4 is middle C). Assume a key of C Major if not specified, so 'do' or 'd' would be 'C4'.
     - Use 'rest' for the pitch of any rests.
     - Correctly identify note durations (whole, half, quarter, eighth, sixteenth).
@@ -126,23 +132,25 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
 
     const response: GenerateContentResponse = await generateWithTimeout(
         apiCall,
-        120000, // 120 seconds
+        240000, // 240 seconds (4 minutes)
         "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again."
     );
 
     const jsonText = response.text.trim();
     const parsedJson = JSON.parse(jsonText);
+
+    // Ensure the response has a `parts` array, even if the AI failed to provide one.
+    if (!parsedJson.parts || !Array.isArray(parsedJson.parts)) {
+        if (parsedJson.measures) {
+            // If the old `measures` format is returned, adapt it to the new structure.
+            parsedJson.parts = [{ partName: 'Main', measures: parsedJson.measures }];
+            delete parsedJson.measures;
+        } else {
+            throw new Error("AI response did not contain the expected 'parts' array.");
+        }
+    }
     
-    // Generate MIDI from the parsed JSON structure
-    const midiGenerator = new MIDIGenerator();
-    const midiData = midiGenerator.generateMIDI(parsedJson.measures, parsedJson.tempo);
-    const midiBase64 = uint8ArrayToBase64(midiData);
-
-    const result: ParsedMusic = {
-        ...parsedJson,
-        midiBase64: midiBase64,
-    };
-
+    const result: ParsedMusic = parsedJson;
     return result;
 
   } catch (error) {
