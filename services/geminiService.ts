@@ -113,7 +113,7 @@ export const parseSheetMusic = async (notationText: string, file?: File): Promis
 
     const response: GenerateContentResponse = await generateWithTimeout(
         apiCall,
-        60000, // 60 seconds
+        120000, // 120 seconds
         "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again."
     );
 
