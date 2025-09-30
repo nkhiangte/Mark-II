@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { PlayIcon } from './icons/PlayIcon';
 import { StopIcon } from './icons/StopIcon';
@@ -16,9 +15,11 @@ interface ControlsProps {
   onStop: () => void;
   onExportWav: () => void;
   onExportMidi: () => void;
+  onConvertToSolfa: (key: string) => void;
   isMusicLoaded: boolean;
   isPlaying: boolean;
   isLoading: boolean;
+  isConverting: boolean;
   tempo: number;
   onTempoChange: (newTempo: number) => void;
   parts: string[];
@@ -28,8 +29,8 @@ interface ControlsProps {
 
 const Controls: React.FC<ControlsProps> = ({ 
   onImport, onExtractText, notationText, onNotationTextChange, selectedFile, onSelectedFileChange,
-  onPlay, onStop, onExportWav, onExportMidi, 
-  isMusicLoaded, isPlaying, isLoading,
+  onPlay, onStop, onExportWav, onExportMidi, onConvertToSolfa,
+  isMusicLoaded, isPlaying, isLoading, isConverting,
   tempo, onTempoChange,
   parts, selectedPart, onPartChange
 }) => {
@@ -106,7 +107,7 @@ A: s, l, t,| d t, l,
   const renderPlaybackControls = () => (
     <>
       {!isPlaying ? (
-        <button onClick={onPlay} disabled={!isMusicLoaded || isLoading} className="control-button bg-teal-600 hover:bg-teal-500">
+        <button onClick={onPlay} disabled={!isMusicLoaded || isLoading || isConverting} className="control-button bg-teal-600 hover:bg-teal-500">
           <PlayIcon /> Play
         </button>
       ) : (
@@ -119,10 +120,10 @@ A: s, l, t,| d t, l,
 
   const renderExportControls = () => (
     <div className="grid grid-cols-2 gap-2">
-      <button onClick={onExportWav} disabled={!isMusicLoaded || isLoading || isPlaying} className="control-button bg-blue-600 hover:bg-blue-500">
+      <button onClick={onExportWav} disabled={!isMusicLoaded || isLoading || isPlaying || isConverting} className="control-button bg-blue-600 hover:bg-blue-500">
         <DownloadIcon /> WAV
       </button>
-      <button onClick={onExportMidi} disabled={!isMusicLoaded || isLoading || isPlaying} className="control-button bg-purple-600 hover:bg-purple-500">
+      <button onClick={onExportMidi} disabled={!isMusicLoaded || isLoading || isPlaying || isConverting} className="control-button bg-purple-600 hover:bg-purple-500">
         <DownloadIcon /> MIDI
       </button>
     </div>
@@ -138,7 +139,7 @@ A: s, l, t,| d t, l,
                   id="part-selector"
                   value={selectedPart}
                   onChange={(e) => onPartChange(e.target.value)}
-                  disabled={!isMusicLoaded || isLoading || isPlaying}
+                  disabled={!isMusicLoaded || isLoading || isPlaying || isConverting}
                   className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
               >
                   <option value="All">All Parts</option>
@@ -150,21 +151,21 @@ A: s, l, t,| d t, l,
       )
   );
 
-  const isImportDisabled = isLoading;
+  const isInputDisabled = isLoading || isConverting;
 
   return (
     <div className="bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 space-y-6 h-full flex flex-col">
       <div>
-        <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Import Music</h2>
+        <h2 className="text-xl font-semibold mb-3 text-teal-400">1. Input &amp; Convert</h2>
         <p className="text-sm text-gray-400 mb-4">
-          Paste text notation or upload an image. If uploading, extract text before parsing.
+          Paste notation, upload an image, or use an example. Use the buttons below to convert between Standard Notation (a visual score) and Tonic Sol-fa text.
         </p>
         <textarea
           value={notationText}
           onChange={(e) => onNotationTextChange(e.target.value)}
           placeholder="e.g., C G Am F, guitar tabs, or 'd r m f s'..."
           className="w-full h-32 p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
-          disabled={isImportDisabled}
+          disabled={isInputDisabled}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -175,7 +176,7 @@ A: s, l, t,| d t, l,
                     value={keySignature}
                     onChange={(e) => setKeySignature(e.target.value)}
                     className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
-                    disabled={isImportDisabled}
+                    disabled={isInputDisabled}
                 >
                     {keys.map(k => <option key={k} value={k}>{k} Major</option>)}
                 </select>
@@ -187,7 +188,7 @@ A: s, l, t,| d t, l,
                     onChange={loadExample}
                     defaultValue=""
                     className="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
-                    disabled={isImportDisabled}
+                    disabled={isInputDisabled}
                 >
                     <option value="">Select an example...</option>
                     <option value="separate">Separate Parts Example</option>
@@ -198,14 +199,14 @@ A: s, l, t,| d t, l,
         </div>
         
         <div className="mt-4">
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.musicxml,.xml" disabled={isImportDisabled} />
-            <button onClick={handleFileSelectClick} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isImportDisabled}>
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.musicxml,.xml" disabled={isInputDisabled} />
+            <button onClick={handleFileSelectClick} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isInputDisabled}>
                 <UploadIcon /> {selectedFile ? "Change File" : "Select Image File"}
             </button>
             {selectedFile && (
                 <div className="text-xs text-center mt-2 text-gray-400 flex items-center justify-center">
                     <span>{selectedFile.name}</span>
-                    <button onClick={clearFile} className="ml-2 text-red-400 hover:text-red-300" disabled={isImportDisabled}>&times;</button>
+                    <button onClick={clearFile} className="ml-2 text-red-400 hover:text-red-300" disabled={isInputDisabled}>&times;</button>
                 </div>
             )}
             {selectedFile && (
@@ -218,9 +219,18 @@ A: s, l, t,| d t, l,
               </button>
             )}
         </div>
-        <button onClick={handleImportClick} disabled={isImportDisabled} className="mt-4 w-full control-button bg-green-700 hover:bg-green-600 text-lg font-bold">
-          {isLoading ? 'Processing...' : 'Parse & Import'}
-        </button>
+        <div className="mt-4 grid grid-cols-1 gap-2">
+            <button onClick={handleImportClick} disabled={isInputDisabled} className="w-full control-button bg-green-700 hover:bg-green-600 text-lg font-bold">
+              {isLoading ? 'Processing...' : 'Convert to Standard Notation'}
+            </button>
+            <button 
+              onClick={() => onConvertToSolfa(keySignature)} 
+              disabled={!isMusicLoaded || isLoading || isPlaying || isConverting}
+              className="w-full control-button bg-indigo-600 hover:bg-indigo-500"
+            >
+              {isConverting ? 'Converting...' : 'Convert to Tonic Sol-fa'}
+            </button>
+        </div>
       </div>
       
       <div className="flex-grow">
@@ -238,7 +248,7 @@ A: s, l, t,| d t, l,
                     max="240"
                     value={tempo}
                     onChange={(e) => onTempoChange(Number(e.target.value))}
-                    disabled={!isMusicLoaded || isLoading || isPlaying}
+                    disabled={!isMusicLoaded || isLoading || isPlaying || isConverting}
                     className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-teal-400 [&::-moz-range-thumb]:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <input
@@ -247,7 +257,7 @@ A: s, l, t,| d t, l,
                     max="240"
                     value={tempo}
                     onChange={(e) => onTempoChange(Number(e.target.value))}
-                    disabled={!isMusicLoaded || isLoading || isPlaying}
+                    disabled={!isMusicLoaded || isLoading || isPlaying || isConverting}
                     className="w-20 p-1 bg-gray-900 border border-gray-600 rounded-md text-center focus:ring-2 focus:ring-teal-500 focus:outline-none transition disabled:opacity-50"
                 />
             </div>

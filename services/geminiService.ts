@@ -198,3 +198,61 @@ export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic
     throw new Error("Failed to parse sheet music. The AI model could not process the input.");
   }
 };
+
+export const convertToSolfa = async (music: ParsedMusic, key: string): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
+  }
+
+  const formatMusicForPrompt = (music: ParsedMusic): string => {
+    return music.parts.map(part => {
+        const measuresStr = part.measures.map(measure => 
+            measure.notes.map(note => `${note.pitch}:${note.duration}`).join(' ')
+        ).join(' | ');
+        return `${part.partName}: ${measuresStr}`;
+    }).join('\n');
+  };
+
+  const formattedMusic = formatMusicForPrompt(music);
+
+  const prompt = `
+    You are an expert music theorist specializing in Tonic Sol-fa notation.
+    Your task is to convert the provided musical data from scientific pitch notation into standard Tonic Sol-fa notation.
+
+    Target Key: ${key} Major.
+    - 'do' should correspond to the tonic of ${key} Major.
+    - Use standard abbreviated solfege syllables (d, r, m, f, s, l, t).
+    - Infer the correct octave using commas (,) for lower octaves and apostrophes (') for higher octaves.
+    - Represent rhythm using common Tonic Sol-fa conventions. The input format is "Pitch:Duration". Use colons, periods, dashes, and bars (|) to represent the rhythm accurately.
+    - Format the output clearly, with each part on a new line, prefixed by its name (e.g., "S: ").
+
+    Music Data:
+    ${formattedMusic}
+
+    Provide only the resulting Tonic Sol-fa text as your response. Start with "Doh is ${key}".
+  `;
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const apiCall = ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    
+    const response: GenerateContentResponse = await generateWithTimeout(
+      apiCall,
+      120000, // 2 minute timeout
+      "The AI model took too long to respond during the conversion."
+    );
+
+    return response.text;
+
+  } catch (error) {
+    console.error("Error calling Gemini API for Sol-fa conversion:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to convert to Tonic Sol-fa: ${error.message}`);
+    }
+    throw new Error("Failed to convert to Tonic Sol-fa. The AI model could not process the request.");
+  }
+};

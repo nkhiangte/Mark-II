@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { ParsedMusic } from './types';
-import { parseSheetMusic, extractTextFromImage } from './services/geminiService';
+import { parseSheetMusic, extractTextFromImage, convertToSolfa } from './services/geminiService';
 import { SoundEngine } from './services/soundEngine';
 import { exportToWav, exportToMidi } from './services/exportService';
 import { SolfegeParser } from './services/solfegeParser';
@@ -16,6 +16,7 @@ import Loader from './components/Loader';
 const App: React.FC = () => {
   const [parsedMusic, setParsedMusic] = useState<ParsedMusic | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isConverting, setIsConverting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackTempo, setPlaybackTempo] = useState<number>(120);
@@ -76,6 +77,20 @@ const App: React.FC = () => {
     }
   }, [isPlaying]);
 
+  const handleConvertToSolfa = useCallback(async (key: string) => {
+    if (!parsedMusic) return;
+    setIsConverting(true);
+    setError(null);
+    try {
+      const solfaText = await convertToSolfa(parsedMusic, key);
+      setNotationText(solfaText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to convert to Tonic Sol-fa.');
+    } finally {
+      setIsConverting(false);
+    }
+  }, [parsedMusic]);
+
   const handlePlay = useCallback(async () => {
     if (!parsedMusic) return;
 
@@ -134,9 +149,11 @@ const App: React.FC = () => {
             onStop={handleStop}
             onExportWav={handleExportWav}
             onExportMidi={handleExportMidi}
+            onConvertToSolfa={handleConvertToSolfa}
             isMusicLoaded={!!parsedMusic}
             isPlaying={isPlaying}
             isLoading={isLoading}
+            isConverting={isConverting}
             tempo={playbackTempo}
             onTempoChange={handleTempoChange}
             parts={parsedMusic?.parts?.map(p => p.partName) || []}
