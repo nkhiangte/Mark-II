@@ -83,6 +83,72 @@ const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutM
     });
 };
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function generateContentWithRetry(
+    generateFn: () => Promise<GenerateContentResponse>,
+    timeoutMs: number,
+    timeoutMessage: string,
+    maxRetries = 3,
+    initialDelay = 2000
+): Promise<GenerateContentResponse> {
+    let attempt = 1;
+    let currentDelay = initialDelay;
+
+    while (attempt <= maxRetries) {
+        try {
+            const apiPromise = generateFn();
+            return await generateWithTimeout(apiPromise, timeoutMs, timeoutMessage);
+        } catch (error) {
+            console.warn(`API call failed on attempt ${attempt} of ${maxRetries}.`, error);
+
+            let errorMessage = "An unknown error occurred.";
+            if (error instanceof Error) {
+                errorMessage = error.message;
+            } else if (error && typeof error === 'object' && 'message' in error) {
+                errorMessage = String((error as {message: string}).message);
+            } else {
+                try {
+                    errorMessage = JSON.stringify(error);
+                } catch {
+                    errorMessage = String(error);
+                }
+            }
+
+            const isRetryable = errorMessage.includes("503") || 
+                                errorMessage.toLowerCase().includes("overloaded") || 
+                                errorMessage.toLowerCase().includes("try again later");
+            
+            if (isRetryable && attempt < maxRetries) {
+                console.log(`Retrying in ${currentDelay}ms...`);
+                await delay(currentDelay);
+                currentDelay *= 2; // Exponential backoff
+                attempt++;
+            } else {
+                let finalMessage = "The AI model could not process the request. Please try again later.";
+                try {
+                    const jsonStartIndex = errorMessage.indexOf('{');
+                    if (jsonStartIndex > -1) {
+                        const jsonPart = errorMessage.substring(jsonStartIndex);
+                        const parsedError = JSON.parse(jsonPart);
+                        if (parsedError.error && parsedError.error.message) {
+                            finalMessage = parsedError.error.message;
+                        } else {
+                             finalMessage = errorMessage;
+                        }
+                    } else {
+                        finalMessage = errorMessage;
+                    }
+                } catch (e) {
+                     finalMessage = errorMessage;
+                }
+                throw new Error(finalMessage);
+            }
+        }
+    }
+    throw new Error("Exhausted all retries for the AI API call.");
+}
+
 export const extractTextFromImage = async (file: File): Promise<string> => {
   if (!process.env.API_KEY) {
     throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
@@ -102,14 +168,12 @@ export const extractTextFromImage = async (file: File): Promise<string> => {
     
     const imagePart = await fileToGenerativePart(file);
 
-    const apiCall = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [{ text: prompt }, imagePart] },
-    });
-
-    const response: GenerateContentResponse = await generateWithTimeout(
-        apiCall,
-        120000, // 2 minutes timeout for OCR
+    const response = await generateContentWithRetry(
+        () => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: prompt }, imagePart] },
+        }),
+        120000,
         "The AI model took too long to respond while extracting text from the image."
     );
 
@@ -158,17 +222,15 @@ export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic
 
     const contents = { parts: [ {text: prompt}, {text: processedNotationText} ] };
 
-    const apiCall = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: musicSchema,
-      },
-    });
-
-    const response: GenerateContentResponse = await generateWithTimeout(
-        apiCall,
+    const response = await generateContentWithRetry(
+        () => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: contents,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: musicSchema,
+            },
+        }),
         240000, // 240 seconds (4 minutes)
         "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again."
     );
@@ -235,13 +297,11 @@ export const convertToSolfa = async (music: ParsedMusic, key: string): Promise<s
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const apiCall = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    
-    const response: GenerateContentResponse = await generateWithTimeout(
-      apiCall,
+    const response = await generateContentWithRetry(
+      () => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      }),
       120000, // 2 minute timeout
       "The AI model took too long to respond during the conversion."
     );
