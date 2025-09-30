@@ -70,46 +70,63 @@ export class SolfegeParser {
         
         const lines = cleanedText.split('\n').filter(line => line.trim() && !line.trim().startsWith('//'));
         
-        const parts: any = { soprano: [], alto: [], tenor: [], bass: [] };
-        let currentPart: string | null = null;
+        const parts: Record<string, any[]> = { soprano: [], alto: [], tenor: [], bass: [] };
         const partOrder = ['soprano', 'alto', 'tenor', 'bass'];
-        let partIndex = 0;
+        let sequentialPartIndex = 0;
+        let lastExplicitPart: string | null = null;
+        
+        const linesWithIndicators = lines.map(line => ({ line: line.trim(), match: this.detectPartIndicator(line.trim()) }));
+        const hasAnyExplicitIndicator = linesWithIndicators.some(l => l.match);
 
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            const partMatch = this.detectPartIndicator(trimmedLine);
-            
-            let musicLine = trimmedLine;
-            if (partMatch) {
-                currentPart = partMatch;
-                musicLine = trimmedLine.replace(/^(soprano|sop|s|alto|alt|a|tenor|ten|t|bass|bas|b)[\.\s]*:?/i, '').trim();
-            } else {
-                currentPart = partOrder[partIndex % 4];
-                partIndex++;
+        if (hasAnyExplicitIndicator) {
+            // Mode 1: At least one line has "S:", "A:", etc. Process explicitly.
+            for (const { line, match } of linesWithIndicators) {
+                if (match) {
+                    lastExplicitPart = match.part;
+                    const musicLine = line.substring(match.length).trim();
+                    const measures = this.parseMeasures(musicLine, effectiveKey, lastExplicitPart);
+                    parts[lastExplicitPart].push(...measures);
+                } else if (lastExplicitPart) {
+                    // This line has no indicator, so it's a continuation of the previous part.
+                    const measures = this.parseMeasures(line, effectiveKey, lastExplicitPart);
+                    parts[lastExplicitPart].push(...measures);
+                }
             }
-            
-            if (currentPart) {
-                const measures = this.parseMeasures(musicLine, effectiveKey, currentPart);
-                parts[currentPart].push(...measures);
+        } else {
+            // Mode 2: No explicit indicators found. Assume vertical alignment (S, A, T, B order).
+            for (const line of lines) {
+                const partName = partOrder[sequentialPartIndex % 4];
+                const measures = this.parseMeasures(line.trim(), effectiveKey, partName);
+                parts[partName].push(...measures);
+                sequentialPartIndex++;
             }
         }
 
-        const measureCount = Math.max(...Object.values(parts).map((p: any) => p.length));
+        const measureCount = Math.max(0, ...Object.values(parts).map((p: any) => p.length));
         return this.alignMeasures(parts, measureCount);
     }
 
-    private detectPartIndicator(line: string) {
-        // FIX: The values in `partPatterns` are regular expressions, so the type should be `Record<string, RegExp>`.
+    private detectPartIndicator(line: string): { part: string, length: number } | null {
         const partPatterns: Record<string, RegExp> = {
-            'soprano': /^(soprano|sop|s\.?)\s*[:=-]/i,
-            'alto': /^(alto|alt|a\.?)\s*[:=-]/i,
-            'tenor': /^(tenor|ten|t\.?)\s*[:=-]/i,
-            'bass': /^(bass|bas|b\.?)\s*[:=-]/i
+            'soprano': /^(soprano|sop|s)[\s.:]+/i,
+            'alto':    /^(alto|alt|a)[\s.:]+/i,
+            'tenor':   /^(tenor|ten|t)[\s.:]+/i,
+            'bass':    /^(bass|bas|b)[\s.:]+/i
         };
 
         for (const [part, pattern] of Object.entries(partPatterns)) {
-            if (pattern.test(line.toLowerCase())) {
-                return part;
+            const match = line.match(pattern);
+            if (match) {
+                const indicator = match[1] || '';
+                // Heuristic: If the indicator is a single letter 's' or 't' (which are also notes),
+                // and it is NOT followed by a colon, we assume it's a note to prevent ambiguity.
+                // e.g., "s l t" is a melody, but "s: l t" is Soprano part.
+                if (indicator.length === 1 && ['s', 't'].includes(indicator.toLowerCase())) {
+                    if (!match[0].includes(':')) {
+                        return null; // Ambiguous case, treat as a note line.
+                    }
+                }
+                return { part: part, length: match[0].length };
             }
         }
         return null;

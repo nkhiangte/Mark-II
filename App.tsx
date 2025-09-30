@@ -12,6 +12,7 @@ import Controls from './components/Controls';
 import SheetMusicViewer from './components/SheetMusicViewer';
 import SATBDebugViewer from './components/SATBDebugViewer';
 import Loader from './components/Loader';
+import CameraCapture from './components/CameraCapture';
 
 const App: React.FC = () => {
   const [parsedMusic, setParsedMusic] = useState<ParsedMusic | null>(null);
@@ -25,28 +26,37 @@ const App: React.FC = () => {
   const [notationText, setNotationText] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('AI is parsing your music...');
+  const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
 
 
   const soundEngineRef = useRef<SoundEngine | null>(null);
   const parserRef = useRef(new SolfegeParser());
+  const abortControllerRef = useRef<AbortController | null>(null);
   
-  const handleExtractText = async (file: File) => {
+  const handleExtractText = useCallback(async (file: File) => {
     setIsLoading(true);
     setLoadingMessage('Extracting text from image...');
     setError(null);
     setParsedMusic(null); // Clear previous results
 
+    abortControllerRef.current = new AbortController();
+
     try {
-      const extractedText = await extractTextFromImage(file);
+      const extractedText = await extractTextFromImage(file, { signal: abortControllerRef.current.signal });
       setNotationText(extractedText);
       setSelectedFile(null); // Clear the file after extraction, as its content is now in the textarea
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to extract text from image.');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.log('Text extraction cancelled by user.');
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to extract text from image.');
+      }
     } finally {
       setIsLoading(false);
       setLoadingMessage('AI is parsing your music...');
     }
-  };
+  }, []);
 
   const handleImport = useCallback(async (notation: string, file?: File, format?: string, key?: string) => {
     setIsLoading(true);
@@ -58,6 +68,8 @@ const App: React.FC = () => {
       soundEngineRef.current?.stop();
       setIsPlaying(false);
     }
+    
+    abortControllerRef.current = new AbortController();
 
     try {
       if (notation && SolfegeParser.isSolfege(notation)) {
@@ -65,13 +77,18 @@ const App: React.FC = () => {
         setSatbDebugData(parsedData);
       }
 
-      const result = await parseSheetMusic(notation);
+      const result = await parseSheetMusic(notation, { signal: abortControllerRef.current.signal });
       setParsedMusic(result);
       setPlaybackTempo(result.tempo);
       setSelectedPart('All');
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.log('Parsing cancelled by user.');
+        setError(null);
+      } else {
+        console.error(err);
+        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -132,9 +149,28 @@ const App: React.FC = () => {
     setSelectedPart(newPart);
   }, []);
 
+  const handleCancel = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
+
+  const handleOpenCamera = () => {
+    setIsCameraOpen(true);
+  };
+
+  const handleCloseCamera = () => {
+    setIsCameraOpen(false);
+  };
+
+  const handleCapture = useCallback((blob: Blob) => {
+    const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
+    setIsCameraOpen(false);
+    handleExtractText(file);
+  }, [handleExtractText]);
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col p-4 sm:p-6 lg:p-8">
+      {isCameraOpen && <CameraCapture onCapture={handleCapture} onClose={handleCloseCamera} />}
       <Header />
       <main className="flex-grow flex flex-col xl:flex-row gap-8 mt-6">
         <div className="xl:w-1/3 w-full flex flex-col gap-8">
@@ -150,6 +186,7 @@ const App: React.FC = () => {
             onExportWav={handleExportWav}
             onExportMidi={handleExportMidi}
             onConvertToSolfa={handleConvertToSolfa}
+            onOpenCamera={handleOpenCamera}
             isMusicLoaded={!!parsedMusic}
             isPlaying={isPlaying}
             isLoading={isLoading}
@@ -163,7 +200,7 @@ const App: React.FC = () => {
         </div>
         <div className="xl:w-2/3 w-full flex-grow flex flex-col">
             <div className="bg-gray-800/50 rounded-lg shadow-2xl p-6 border border-gray-700 min-h-[400px] flex items-center justify-center flex-grow">
-              {isLoading && <Loader message={loadingMessage} />}
+              {isLoading && <Loader message={loadingMessage} onCancel={handleCancel} />}
               {error && <div className="text-red-400 text-center">{error}</div>}
               {!isLoading && !error && parsedMusic && <SheetMusicViewer music={parsedMusic} />}
               {!isLoading && !error && !parsedMusic && (

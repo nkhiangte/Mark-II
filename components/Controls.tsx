@@ -3,10 +3,12 @@ import { PlayIcon } from './icons/PlayIcon';
 import { StopIcon } from './icons/StopIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
+import { CameraIcon } from './icons/CameraIcon';
 
 interface ControlsProps {
   onImport: (notation: string, format?: string, key?: string) => void;
   onExtractText: (file: File) => void;
+  onOpenCamera: () => void;
   notationText: string;
   onNotationTextChange: (text: string) => void;
   selectedFile: File | null;
@@ -28,7 +30,7 @@ interface ControlsProps {
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
-  onImport, onExtractText, notationText, onNotationTextChange, selectedFile, onSelectedFileChange,
+  onImport, onExtractText, onOpenCamera, notationText, onNotationTextChange, selectedFile, onSelectedFileChange,
   onPlay, onStop, onExportWav, onExportMidi, onConvertToSolfa,
   isMusicLoaded, isPlaying, isLoading, isConverting,
   tempo, onTempoChange,
@@ -199,10 +201,16 @@ A: s, l, t,| d t, l,
         </div>
         
         <div className="mt-4">
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.musicxml,.xml" disabled={isInputDisabled} />
-            <button onClick={handleFileSelectClick} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isInputDisabled}>
-                <UploadIcon /> {selectedFile ? "Change File" : "Select Image File"}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.musicxml,.xml" disabled={isInputDisabled} />
+              <button onClick={handleFileSelectClick} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isInputDisabled}>
+                  <UploadIcon /> {selectedFile ? "Change File" : "Select File"}
+              </button>
+              <button onClick={onOpenCamera} className="w-full control-button bg-gray-700 hover:bg-gray-600 text-sm" disabled={isInputDisabled}>
+                  <CameraIcon /> Use Camera
+              </button>
+            </div>
+
             {selectedFile && (
                 <div className="text-xs text-center mt-2 text-gray-400 flex items-center justify-center">
                     <span>{selectedFile.name}</span>

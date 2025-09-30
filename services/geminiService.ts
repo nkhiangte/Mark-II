@@ -3,6 +3,10 @@ import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ParsedMusic } from '../types';
 import { SolfegeParser } from './solfegeParser';
 
+interface RequestOptions {
+  signal?: AbortSignal;
+}
+
 const musicSchema = {
   type: Type.OBJECT,
   properties: {
@@ -70,16 +74,35 @@ const fileToGenerativePart = async (file: File) => {
   };
 }
 
-const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+const generateWithTimeout = <T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string, signal?: AbortSignal): Promise<T> => {
+    if (signal?.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    }
+
     let timeoutId: number;
+    let abortHandler: (() => void) | undefined;
+
     const timeoutPromise = new Promise<T>((_, reject) => {
         timeoutId = window.setTimeout(() => {
             reject(new Error(timeoutMessage));
         }, timeoutMs);
     });
 
-    return Promise.race([promise, timeoutPromise]).finally(() => {
+    const promisesToRace: Promise<T>[] = [promise, timeoutPromise];
+
+    if (signal) {
+        const abortPromise = new Promise<T>((_, reject) => {
+            abortHandler = () => reject(new DOMException('Aborted', 'AbortError'));
+            signal.addEventListener('abort', abortHandler);
+        });
+        promisesToRace.push(abortPromise);
+    }
+
+    return Promise.race(promisesToRace).finally(() => {
         clearTimeout(timeoutId);
+        if (signal && abortHandler) {
+            signal.removeEventListener('abort', abortHandler);
+        }
     });
 };
 
@@ -90,16 +113,21 @@ async function generateContentWithRetry(
     timeoutMs: number,
     timeoutMessage: string,
     maxRetries = 3,
-    initialDelay = 2000
+    initialDelay = 2000,
+    signal?: AbortSignal
 ): Promise<GenerateContentResponse> {
     let attempt = 1;
     let currentDelay = initialDelay;
 
     while (attempt <= maxRetries) {
+        signal?.throwIfAborted();
         try {
             const apiPromise = generateFn();
-            return await generateWithTimeout(apiPromise, timeoutMs, timeoutMessage);
+            return await generateWithTimeout(apiPromise, timeoutMs, timeoutMessage, signal);
         } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                throw error; // Re-throw cancellation to stop retries
+            }
             console.warn(`API call failed on attempt ${attempt} of ${maxRetries}.`, error);
 
             let errorMessage = "An unknown error occurred.";
@@ -114,10 +142,12 @@ async function generateContentWithRetry(
                     errorMessage = String(error);
                 }
             }
-
-            const isRetryable = errorMessage.includes("503") || 
-                                errorMessage.toLowerCase().includes("overloaded") || 
-                                errorMessage.toLowerCase().includes("try again later");
+            
+            const lowerErrorMessage = errorMessage.toLowerCase();
+            const isRetryable = lowerErrorMessage.includes("503") || 
+                                lowerErrorMessage.includes("overloaded") || 
+                                lowerErrorMessage.includes("try again later") ||
+                                lowerErrorMessage.includes("took too long to respond");
             
             if (isRetryable && attempt < maxRetries) {
                 console.log(`Retrying in ${currentDelay}ms...`);
@@ -149,7 +179,7 @@ async function generateContentWithRetry(
     throw new Error("Exhausted all retries for the AI API call.");
 }
 
-export const extractTextFromImage = async (file: File): Promise<string> => {
+export const extractTextFromImage = async (file: File, options?: RequestOptions): Promise<string> => {
   if (!process.env.API_KEY) {
     throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
   }
@@ -174,21 +204,26 @@ export const extractTextFromImage = async (file: File): Promise<string> => {
             contents: { parts: [{ text: prompt }, imagePart] },
         }),
         120000,
-        "The AI model took too long to respond while extracting text from the image."
+        "The AI model took too long to respond while extracting text from the image.",
+        3,
+        2000,
+        options?.signal
     );
 
     return response.text;
   } catch (error) {
     console.error("Error calling Gemini API for text extraction:", error);
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
         throw new Error(`Failed to extract text from image: ${error.message}`);
+    } else if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
     }
     throw new Error("Failed to extract text from image. The AI model could not process the input.");
   }
 };
 
 
-export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic> => {
+export const parseSheetMusic = async (notationText: string, options?: RequestOptions): Promise<ParsedMusic> => {
   if (!process.env.API_KEY) {
     throw new Error("Your Google AI API Key is not configured. Please ensure the API_KEY environment variable is set for this application to function.");
   }
@@ -200,19 +235,35 @@ export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic
   }
 
   const prompt = `
-    You are an expert music theorist and programmer.
-    Your task is to analyze the provided musical notation and convert it into a structured JSON object according to the provided schema.
+    You are an expert music theorist and programmer, with exceptional skill in interpreting text-based music notation, especially Tonic Sol-fa. Your task is to analyze the provided music notation and convert it into a structured JSON object. Your absolute top priority is to correctly interpret the rhythm—note durations, sustains, and rests—as this is where mistakes are most common.
 
-    The input is text-based notation (like guitar tablature, chord names, or tonic sol-fa).
+    **Core Principles for Rhythmic Interpretation:**
 
-    Key Instructions:
-    - For SATB or other multi-part music, create a separate entry in the 'parts' array for each voice or instrument (e.g., 'Soprano', 'Alto', 'Tenor', 'Bass').
-    - If it is a solo instrument piece (like piano), you can create one part named 'main' or similar.
-    - Convert all pitches to Scientific Pitch Notation (e.g., C4 is middle C). Assume a key of C Major if not specified, so 'do' or 'd' would be 'C4'.
-    - Use 'rest' for the pitch of any rests.
-    - Correctly identify note durations (whole, half, quarter, eighth, sixteenth).
-    - If the input is ambiguous or invalid, make a reasonable interpretation. For example, if no durations are given for tonic sol-fa, assume they are all quarter notes.
-    - Do NOT generate a MIDI file. Only provide the JSON structure for the notes.
+    1.  **Analyze the Structure First:** Before assigning durations, scan the entire piece. Identify the time signature by counting the beats in several measures. Most simple hymns are 4/4, 3/4, or 2/4. Default to 4/4 if ambiguous, but let the notation guide you.
+    2.  **The Measure is King:** The total duration of notes and rests in a measure MUST add up to the time signature. Use this constraint to resolve ambiguities.
+
+    **Tonic Sol-fa Rhythmic Notation Guide:**
+
+    *   **Measures (\`|\`):** The pipe character separates measures. It's a hard boundary.
+    *   **Sustains (\`-\`):** A dash sustains the preceding note. In most conventions, a dash represents one full beat.
+        *   Example (4/4 time): \`d:- \` is a half note (2 beats). \`d:-:-:-\` is a whole note (4 beats).
+    *   **Dotted Notes (\`.\`):** A dot after a note increases its duration by 50%.
+        *   Example: In a measure like \`d. r | m -\`, \`d.\` is a dotted quarter note (1.5 beats) and \`r\` is an eighth note (0.5 beats).
+    *   **Beat Separation (\`:\` or \` \`):** Colons and spaces are used to group notes. Their meaning can be contextual.
+        *   **Often, a colon separates full beats.** Example: \`d:r.m|f:s\` could be interpreted in 4/4 as: Beat 1=\`d\` (quarter); Beat 2=\`r.m\` (dotted-eighth + sixteenth); Beat 3=\`f\` (quarter); Beat 4=\`s\` (quarter).
+        *   **Spaces often subdivide a beat.** Example: \`s l\` could be two eighth notes making up one beat.
+    *   **Rests:** Rests are critical and often implied.
+        *   If a measure seems too short, it likely contains rests.
+        *   A blank space between beat separators (like \`d : : m\`) implies a rest.
+        *   A single dot \`.\` or a \`0\` on its own can also signify a rest for one beat.
+        *   **You MUST ensure measures are complete.** If a 4/4 measure only contains notation for 3 beats, you must add a quarter rest to complete it.
+
+    **General Instructions:**
+
+    *   For multi-part music (like SATB), create a separate entry in the 'parts' array for each voice.
+    *   Convert all pitches to Scientific Pitch Notation (e.g., C4 for middle C).
+    *   Use 'rest' for the pitch of any rests, and assign them a valid duration.
+    *   Your final JSON output must be perfectly structured according to the schema. Double-check your work.
 
     Music Notation Input:
   `;
@@ -232,7 +283,10 @@ export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic
             },
         }),
         240000, // 240 seconds (4 minutes)
-        "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again."
+        "The AI model took too long to respond. This might be due to an invalid API key, network issues, or high server load. Please check your API key configuration and try again.",
+        3,
+        2000,
+        options?.signal
     );
 
     const jsonText = response.text.trim();
@@ -254,8 +308,10 @@ export const parseSheetMusic = async (notationText: string): Promise<ParsedMusic
 
   } catch (error) {
     console.error("Error calling Gemini API:", error);
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
         throw new Error(`Failed to parse sheet music: ${error.message}`);
+    } else if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
     }
     throw new Error("Failed to parse sheet music. The AI model could not process the input.");
   }

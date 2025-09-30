@@ -1,5 +1,7 @@
 {
   "name": "Mark II",
   "description": "An intelligent sheet music application that imports standard notation, guitar tablature, or tonic sol-fa, and exports it to MIDI and audio formats using a built-in sound engine and AI-powered parsing.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
